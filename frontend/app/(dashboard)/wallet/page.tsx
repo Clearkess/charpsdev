@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLinkIcon, WalletIcon } from "lucide-react";
+import Link from "next/link";
+import { ExternalLinkIcon, ReceiptTextIcon, WalletIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -99,7 +100,16 @@ export default function WalletPage() {
         </CardHeader>
         <CardContent>
           {!rows.length ? (
-            <EmptyBlock title="No transactions" description="Your wallet transaction history will appear here." />
+            <EmptyBlock
+              title="No transactions yet"
+              description="Fund your wallet above to see your transaction history appear here."
+              icon={ReceiptTextIcon}
+              action={
+                <Button render={<Link href="/services" />} variant="outline" size="sm">
+                  Browse services
+                </Button>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>

@@ -1,13 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   BellIcon,
   LayoutDashboardIcon,
   LogOutIcon,
   MenuIcon,
   PackageIcon,
+  SearchIcon,
   ShieldCheckIcon,
   ShoppingCartIcon,
   UserIcon,
@@ -17,6 +19,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { useUnreadCountQuery } from "@/hooks/queries/useNotificationsQueries";
 import { APP_NAME } from "@/lib/constants";
@@ -127,11 +130,52 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+function TopbarSearch() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const serviceSearchTerm = useUiStore((state) => state.serviceSearchTerm);
+  const setServiceSearchTerm = useUiStore((state) => state.setServiceSearchTerm);
+
+  const onChange = (next: string) => {
+    setServiceSearchTerm(next);
+    if (next && pathname !== "/services") {
+      router.push("/services");
+    }
+  };
+
+  return (
+    <div className="relative hidden w-full max-w-xs sm:block">
+      <SearchIcon
+        className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <Input
+        value={serviceSearchTerm}
+        onChange={(event) => onChange(event.target.value)}
+        type="search"
+        placeholder="Search services..."
+        aria-label="Search services"
+        className="pl-8"
+      />
+    </div>
+  );
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const mobileSidebarOpen = useUiStore((state) => state.mobileSidebarOpen);
   const openMobileSidebar = useUiStore((state) => state.openMobileSidebar);
   const closeMobileSidebar = useUiStore((state) => state.closeMobileSidebar);
+  const setServiceSearchTerm = useUiStore((state) => state.setServiceSearchTerm);
+  const pathname = usePathname();
   const { user } = useAuth();
+
+  // Clear the search term whenever the visitor navigates away from Services,
+  // so it doesn't silently keep filtering next time they return.
+  useEffect(() => {
+    if (pathname !== "/services") {
+      setServiceSearchTerm("");
+    }
+  }, [pathname, setServiceSearchTerm]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -177,6 +221,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <MenuIcon className="size-5" aria-hidden="true" />
             </button>
             <p className="font-heading text-lg font-semibold md:hidden">{APP_NAME}</p>
+            <TopbarSearch />
             <div className="ml-auto flex items-center gap-3">
               {user?.is_admin ? <Badge variant="secondary">Admin</Badge> : null}
               <Avatar size="sm">

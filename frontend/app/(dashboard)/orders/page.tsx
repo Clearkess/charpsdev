@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import { ShoppingCartIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -85,7 +87,16 @@ export default function OrdersPage() {
         </CardContent>
       </Card>
       {!rows.length ? (
-        <EmptyBlock title="No orders" description="Orders you place will show up here." />
+        <EmptyBlock
+          title="No orders yet"
+          description="Create your first order above, or browse the marketplace to see what's available."
+          icon={ShoppingCartIcon}
+          action={
+            <Button render={<Link href="/services" />} variant="outline" size="sm">
+              Browse services
+            </Button>
+          }
+        />
       ) : (
         <Card>
           <CardContent>

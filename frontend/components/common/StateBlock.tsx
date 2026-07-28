@@ -22,13 +22,29 @@ export function ErrorBlock({ message }: { message: string }) {
   );
 }
 
-export function EmptyBlock({ title, description }: { title: string; description: string }) {
+export function EmptyBlock({
+  title,
+  description,
+  action,
+  icon: Icon = InboxIcon,
+}: {
+  title: string;
+  description: string;
+  /** Optional CTA rendered below the description, e.g. a link/button to browse services or create the first item. */
+  action?: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+}) {
   return (
     <Card>
-      <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
-        <InboxIcon className="size-6 text-muted-foreground" aria-hidden="true" />
-        <p className="font-medium">{title}</p>
-        <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
+      <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+        <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Icon className="size-6" aria-hidden={true} />
+        </div>
+        <div className="space-y-1">
+          <p className="font-medium">{title}</p>
+          <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
+        </div>
+        {action ? <div className="mt-1">{action}</div> : null}
       </CardContent>
     </Card>
   );
