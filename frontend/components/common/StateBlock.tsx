@@ -1,16 +1,68 @@
+import { Loader2Icon, TriangleAlertIcon, InboxIcon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+
 export function LoadingBlock({ label = "Loading..." }: { label?: string }) {
-  return <div className="rounded-2xl bg-white p-6 text-sm text-neutral-500 shadow-sm ring-1 ring-black/5">{label}</div>;
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+        {label}
+      </CardContent>
+    </Card>
+  );
 }
 
 export function ErrorBlock({ message }: { message: string }) {
-  return <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">{message}</div>;
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+      <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <p>{message}</p>
+    </div>
+  );
 }
 
 export function EmptyBlock({ title, description }: { title: string; description: string }) {
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
-      <p className="font-medium">{title}</p>
-      <p className="mt-2 text-sm text-neutral-600">{description}</p>
+    <Card>
+      <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+        <InboxIcon className="size-6 text-muted-foreground" aria-hidden="true" />
+        <p className="font-medium">{title}</p>
+        <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Grid of skeleton stat cards, used while dashboard-style summary data is loading. */
+export function StatCardsSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: count }).map((_, index) => (
+        <Card key={index}>
+          <CardContent className="space-y-3 py-1">
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="h-7 w-16" />
+          </CardContent>
+        </Card>
+      ))}
     </div>
+  );
+}
+
+/** Skeleton rows for table-based list pages while data is loading. */
+export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
+  return (
+    <Card>
+      <CardContent className="space-y-3">
+        {Array.from({ length: rows }).map((_, rowIndex) => (
+          <div key={rowIndex} className="flex items-center gap-4">
+            {Array.from({ length: cols }).map((_, colIndex) => (
+              <Skeleton key={colIndex} className={colIndex === 0 ? "h-4 w-32" : "h-4 flex-1"} />
+            ))}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

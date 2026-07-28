@@ -1,81 +1,124 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useApiQuery } from "@/hooks/useApiQuery";
-import { createOrder, selectors } from "@/lib/backend";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/StateBlock";
+import { useCreateOrderMutation, useOrdersQuery } from "@/hooks/queries/useOrdersQueries";
+import { useServicesQuery } from "@/hooks/queries/useServicesQuery";
+import { extractErrorMessage } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/common/StateBlock";
-import type { Order, PaginatedResponse, Service } from "@/types/api";
+
+function statusVariant(status: string) {
+  const normalized = status?.toLowerCase();
+  if (normalized === "completed" || normalized === "success") return "success" as const;
+  if (normalized === "cancelled" || normalized === "failed") return "destructive" as const;
+  if (normalized === "pending") return "warning" as const;
+  return "muted" as const;
+}
 
 export default function OrdersPage() {
-  const orders = useApiQuery<{ success: boolean; data: PaginatedResponse<Order> }, PaginatedResponse<Order>>("/orders", { select: selectors.orders });
-  const services = useApiQuery<{ success: boolean; services: Service[] }, Service[]>("/services", { select: selectors.services });
+  const orders = useOrdersQuery();
+  const services = useServicesQuery();
+  const createOrder = useCreateOrderMutation();
   const [serviceId, setServiceId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [message, setMessage] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
   const firstServiceId = useMemo(() => services.data?.[0]?.id?.toString() || "", [services.data]);
   const selectedServiceId = serviceId || firstServiceId;
 
-  if (orders.loading || services.loading) return <LoadingBlock label="Loading orders..." />;
-  if (orders.error || services.error) return <ErrorBlock message={orders.error || services.error || "Order request failed"} />;
+  if (orders.isPending || services.isPending) return <TableSkeleton rows={4} cols={5} />;
+  if (orders.error || services.error) {
+    return <ErrorBlock message={extractErrorMessage(orders.error || services.error, "Order request failed.")} />;
+  }
 
   const onCreateOrder = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedServiceId) return;
-    setSubmitting(true);
     setMessage(null);
     try {
-      const response = await createOrder(Number(selectedServiceId), Number(quantity));
+      const response = await createOrder.mutateAsync({ service_id: Number(selectedServiceId), quantity: Number(quantity) });
       setMessage(response.message || `Order #${response.data.id} created.`);
-      orders.refetch();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Failed to create order.");
-    } finally {
-      setSubmitting(false);
+      setMessage(extractErrorMessage(error, "Failed to create order."));
     }
   };
+
+  const rows = orders.data?.data || [];
 
   return (
     <section className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Orders</h1>
-        <p className="mt-2 text-neutral-600">This page uses the exact order list shape from <code>/orders</code> and the create endpoint <code>POST /orders</code>.</p>
+        <h1 className="font-heading text-3xl font-bold">Orders</h1>
+        <p className="mt-2 text-muted-foreground">Create new orders and track their status.</p>
       </div>
-      <form onSubmit={onCreateOrder} className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
-        <h2 className="text-xl font-semibold">Create order</h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <select value={selectedServiceId} onChange={(e) => setServiceId(e.target.value)} className="rounded-lg border px-3 py-2">
-            {services.data?.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
-          </select>
-          <input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="rounded-lg border px-3 py-2" />
-        </div>
-        <button disabled={submitting || !selectedServiceId} className="mt-4 rounded-lg bg-neutral-900 px-4 py-2 text-white">{submitting ? "Creating..." : "Create order"}</button>
-        {message ? <p className="mt-3 text-sm text-neutral-600">{message}</p> : null}
-      </form>
-      {!orders.data?.data?.length ? (
-        <EmptyBlock title="No orders" description="The paginated `data` array is empty." />
-      ) : (
-        <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b text-neutral-500"><tr><th className="px-2 py-3">ID</th><th className="px-2 py-3">Service</th><th className="px-2 py-3">Quantity</th><th className="px-2 py-3">Amount</th><th className="px-2 py-3">Status</th><th className="px-2 py-3">Created</th></tr></thead>
-              <tbody>
-                {orders.data.data.map((order) => (
-                  <tr key={order.id} className="border-b last:border-b-0">
-                    <td className="px-2 py-3">#{order.id}</td>
-                    <td className="px-2 py-3">{order.service?.name || order.service_id || "—"}</td>
-                    <td className="px-2 py-3">{order.quantity ?? "—"}</td>
-                    <td className="px-2 py-3">{formatCurrency(order.amount ?? order.price ?? 0)}</td>
-                    <td className="px-2 py-3 capitalize">{order.status}</td>
-                    <td className="px-2 py-3">{formatDate(order.created_at)}</td>
-                  </tr>
+      <Card>
+        <CardHeader>
+          <CardTitle>Create order</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={onCreateOrder} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <select
+                value={selectedServiceId}
+                onChange={(e) => setServiceId(e.target.value)}
+                aria-label="Service"
+                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+              >
+                {services.data?.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name}
+                  </option>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </select>
+              <Input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} aria-label="Quantity" />
+            </div>
+            <Button type="submit" disabled={createOrder.isPending || !selectedServiceId}>
+              {createOrder.isPending ? "Creating..." : "Create order"}
+            </Button>
+            {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+          </form>
+        </CardContent>
+      </Card>
+      {!rows.length ? (
+        <EmptyBlock title="No orders" description="Orders you place will show up here." />
+      ) : (
+        <Card>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Service</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell>#{order.id}</TableCell>
+                    <TableCell>{order.service?.name || order.service_id || "—"}</TableCell>
+                    <TableCell>{order.quantity ?? "—"}</TableCell>
+                    <TableCell>{formatCurrency(order.amount ?? order.price ?? 0)}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(order.status)} className="capitalize">
+                        {order.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{formatDate(order.created_at)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
     </section>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 
 export function useAuthGuard() {
   const { user, token, loading } = useAuth();

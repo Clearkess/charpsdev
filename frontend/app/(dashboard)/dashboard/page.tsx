@@ -1,34 +1,72 @@
 "use client";
 
-import { useApiQuery } from "@/hooks/useApiQuery";
-import { selectors } from "@/lib/backend";
+import { PackageIcon, ShoppingCartIcon, WalletIcon, BellIcon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { ErrorBlock, StatCardsSkeleton } from "@/components/common/StateBlock";
+import { useWalletQuery } from "@/hooks/queries/useWalletQueries";
+import { useOrdersQuery } from "@/hooks/queries/useOrdersQueries";
+import { useUnreadCountQuery } from "@/hooks/queries/useNotificationsQueries";
+import { useServicesQuery } from "@/hooks/queries/useServicesQuery";
+import { extractErrorMessage } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
-import type { CountResponse, NotificationItem, Order, PaginatedResponse, Service, Wallet } from "@/types/api";
-import { ErrorBlock, LoadingBlock } from "@/components/common/StateBlock";
 
 export default function DashboardPage() {
-  const wallet = useApiQuery<{ success: boolean; data: Wallet }, Wallet>("/wallet", { select: selectors.wallet });
-  const orders = useApiQuery<{ success: boolean; data: PaginatedResponse<Order> }, PaginatedResponse<Order>>("/orders", { select: selectors.orders });
-  const unread = useApiQuery<CountResponse, number>("/notifications/unread-count", { select: selectors.unreadCount });
-  const services = useApiQuery<{ success: boolean; services: Service[] }, Service[]>("/services", { select: selectors.services });
+  const wallet = useWalletQuery();
+  const orders = useOrdersQuery();
+  const unread = useUnreadCountQuery();
+  const services = useServicesQuery();
 
-  const loading = wallet.loading || orders.loading || unread.loading || services.loading;
+  const loading = wallet.isPending || orders.isPending || unread.isPending || services.isPending;
   const error = wallet.error || orders.error || unread.error || services.error;
 
-  if (loading) return <LoadingBlock label="Loading dashboard data..." />;
-  if (error) return <ErrorBlock message={error} />;
+  if (loading) return <StatCardsSkeleton />;
+  if (error) return <ErrorBlock message={extractErrorMessage(error, "Failed to load dashboard data.")} />;
+
+  const cards = [
+    {
+      label: "Wallet balance",
+      value: formatCurrency(wallet.data?.balance ?? 0, wallet.data?.currency || "NGN"),
+      icon: WalletIcon,
+    },
+    {
+      label: "Orders",
+      value: String(orders.data?.total ?? orders.data?.data.length ?? 0),
+      icon: ShoppingCartIcon,
+    },
+    {
+      label: "Unread notifications",
+      value: String(unread.data ?? 0),
+      icon: BellIcon,
+    },
+    {
+      label: "Available services",
+      value: String(services.data?.length ?? 0),
+      icon: PackageIcon,
+    },
+  ];
 
   return (
     <section className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="mt-2 text-neutral-600">This page is wired to the exact backend response shapes for wallet, orders, unread notifications, and services.</p>
+        <h1 className="font-heading text-3xl font-bold">Dashboard</h1>
+        <p className="mt-2 text-muted-foreground">
+          An overview of your wallet, orders, notifications, and available services.
+        </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5"><p className="text-sm text-neutral-500">Wallet balance</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(wallet.data?.balance ?? 0, wallet.data?.currency || "NGN")}</p></div>
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5"><p className="text-sm text-neutral-500">Orders</p><p className="mt-2 text-2xl font-semibold">{orders.data?.total ?? orders.data?.data.length ?? 0}</p></div>
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5"><p className="text-sm text-neutral-500">Unread notifications</p><p className="mt-2 text-2xl font-semibold">{unread.data ?? 0}</p></div>
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5"><p className="text-sm text-neutral-500">Available services</p><p className="mt-2 text-2xl font-semibold">{services.data?.length ?? 0}</p></div>
+        {cards.map((item) => (
+          <Card key={item.label}>
+            <CardContent className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm text-muted-foreground">{item.label}</p>
+                <p className="mt-2 text-2xl font-semibold">{item.value}</p>
+              </div>
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <item.icon className="size-4.5" aria-hidden="true" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </section>
   );

@@ -1,76 +1,135 @@
 "use client";
 
 import { useState } from "react";
-import { useApiQuery } from "@/hooks/useApiQuery";
-import { initializePayment, selectors } from "@/lib/backend";
+import { ExternalLinkIcon, WalletIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/StateBlock";
+import { useInitializePaymentMutation, useWalletQuery, useWalletTransactionsQuery } from "@/hooks/queries/useWalletQueries";
+import { extractErrorMessage } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { EmptyBlock, ErrorBlock, LoadingBlock } from "@/components/common/StateBlock";
-import type { PaginatedResponse, Transaction, Wallet } from "@/types/api";
+
+function statusVariant(status: string) {
+  const normalized = status?.toLowerCase();
+  if (normalized === "success" || normalized === "completed") return "success" as const;
+  if (normalized === "failed" || normalized === "cancelled") return "destructive" as const;
+  return "muted" as const;
+}
 
 export default function WalletPage() {
-  const wallet = useApiQuery<{ success: boolean; data: Wallet }, Wallet>("/wallet", { select: selectors.wallet });
-  const transactions = useApiQuery<{ success: boolean; data: PaginatedResponse<Transaction> }, PaginatedResponse<Transaction>>("/wallet/transactions", { select: selectors.walletTransactions });
+  const wallet = useWalletQuery();
+  const transactions = useWalletTransactionsQuery();
+  const initializePayment = useInitializePaymentMutation();
   const [amount, setAmount] = useState("100");
   const [fundingMessage, setFundingMessage] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  if (wallet.loading || transactions.loading) return <LoadingBlock label="Loading wallet..." />;
-  if (wallet.error || transactions.error) return <ErrorBlock message={wallet.error || transactions.error || "Wallet request failed"} />;
-  if (!wallet.data) return <EmptyBlock title="No wallet data" description="The backend did not return a wallet object under the expected `data` key." />;
+  if (wallet.isPending || transactions.isPending) return <TableSkeleton rows={4} cols={5} />;
+  if (wallet.error || transactions.error) {
+    return <ErrorBlock message={extractErrorMessage(wallet.error || transactions.error, "Wallet request failed.")} />;
+  }
+  if (!wallet.data) {
+    return <EmptyBlock title="No wallet data" description="We could not find a wallet for your account." />;
+  }
 
   const onInitializePayment = async (event: React.FormEvent) => {
     event.preventDefault();
-    setSubmitting(true);
     setFundingMessage(null);
     try {
-      const response = await initializePayment(Number(amount));
+      const response = await initializePayment.mutateAsync(Number(amount));
       const authUrl = response.data?.authorization_url;
       setFundingMessage(authUrl ? `Authorization URL received: ${authUrl}` : response.message || "Payment initialized.");
     } catch (error) {
-      setFundingMessage(error instanceof Error ? error.message : "Failed to initialize payment.");
-    } finally {
-      setSubmitting(false);
+      setFundingMessage(extractErrorMessage(error, "Failed to initialize payment."));
     }
   };
+
+  const rows = transactions.data?.data || [];
 
   return (
     <section className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Wallet</h1>
-        <p className="mt-2 text-neutral-600">Uses <code>/wallet</code>, <code>/wallet/transactions</code>, and the actual funding endpoint <code>/payment/initialize</code>.</p>
+        <h1 className="font-heading text-3xl font-bold">Wallet</h1>
+        <p className="mt-2 text-muted-foreground">Manage your balance and fund your wallet.</p>
       </div>
-      <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-        <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
-          <p className="text-sm text-neutral-500">Current balance</p>
-          <p className="mt-2 text-3xl font-bold">{formatCurrency(wallet.data.balance, wallet.data.currency)}</p>
-        </div>
-        <form onSubmit={onInitializePayment} className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
-          <h2 className="text-xl font-semibold">Fund wallet</h2>
-          <p className="mt-2 text-sm text-neutral-600">The backend stub at <code>/wallet/deposit</code> is not useful, so this form calls <code>/payment/initialize</code> directly.</p>
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-4 w-full rounded-lg border px-3 py-2" type="number" min="100" step="1" />
-          <button disabled={submitting} className="mt-3 rounded-lg bg-neutral-900 px-4 py-2 text-white">{submitting ? "Initializing..." : "Initialize payment"}</button>
-          {fundingMessage ? <p className="mt-3 text-sm text-neutral-600 break-all">{fundingMessage}</p> : null}
-        </form>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardContent className="flex items-center gap-4">
+            <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <WalletIcon className="size-6" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Current balance</p>
+              <p className="mt-1 text-3xl font-bold">{formatCurrency(wallet.data.balance, wallet.data.currency)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Fund wallet</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={onInitializePayment} className="space-y-3">
+              <Input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                type="number"
+                min="100"
+                step="1"
+                aria-label="Amount to fund"
+              />
+              <Button type="submit" disabled={initializePayment.isPending} className="w-full">
+                {initializePayment.isPending ? "Initializing..." : "Initialize payment"}
+              </Button>
+              {fundingMessage ? (
+                <p className="flex items-start gap-1.5 break-all text-sm text-muted-foreground">
+                  <ExternalLinkIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                  {fundingMessage}
+                </p>
+              ) : null}
+            </form>
+          </CardContent>
+        </Card>
       </div>
-      <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
-        <h2 className="text-xl font-semibold">Recent transactions</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b text-neutral-500"><tr><th className="px-2 py-3">Reference</th><th className="px-2 py-3">Type</th><th className="px-2 py-3">Amount</th><th className="px-2 py-3">Status</th><th className="px-2 py-3">Created</th></tr></thead>
-            <tbody>
-              {(transactions.data?.data || []).map((transaction) => (
-                <tr key={transaction.id} className="border-b last:border-b-0">
-                  <td className="px-2 py-3">{transaction.reference || `#${transaction.id}`}</td>
-                  <td className="px-2 py-3 capitalize">{transaction.type}</td>
-                  <td className="px-2 py-3">{formatCurrency(transaction.amount)}</td>
-                  <td className="px-2 py-3 capitalize">{transaction.status}</td>
-                  <td className="px-2 py-3">{formatDate(transaction.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent transactions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!rows.length ? (
+            <EmptyBlock title="No transactions" description="Your wallet transaction history will appear here." />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                    <TableCell>{transaction.reference || `#${transaction.id}`}</TableCell>
+                    <TableCell className="capitalize">{transaction.type}</TableCell>
+                    <TableCell>{formatCurrency(transaction.amount)}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(transaction.status)} className="capitalize">
+                        {transaction.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{formatDate(transaction.created_at)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </section>
   );
 }

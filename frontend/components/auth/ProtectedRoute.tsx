@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
+import { Loader2Icon } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -15,7 +16,14 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     }
   }, [loading, user, router, pathname]);
 
-  if (loading) return <div className="p-6 text-sm text-neutral-500">Loading your workspace...</div>;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+        Loading your workspace...
+      </div>
+    );
+  }
   if (!user) return null;
   return <>{children}</>;
 }

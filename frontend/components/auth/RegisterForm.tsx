@@ -3,57 +3,71 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { UserPlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
+import { extractErrorMessage } from "@/lib/api";
 
 export default function RegisterForm() {
   const router = useRouter();
-  const { register } = useAuth();
+  const { register, isRegistering } = useAuth();
   const [form, setForm] = useState({ name: "", email: "", password: "", password_confirmation: "" });
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onChange = (key: keyof typeof form, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setLoading(true);
     setError(null);
     try {
       await register(form.name, form.email, form.password, form.password_confirmation);
       router.push("/dashboard");
-    } catch {
-      setError("Registration failed. Verify API validation rules and backend email setup.");
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      setError(extractErrorMessage(err, "Registration failed. Please verify your details and try again."));
     }
   };
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
-        <label className="mb-1 block text-sm font-medium">Name</label>
-        <Input value={form.name} onChange={(e) => onChange("name", e.target.value)} placeholder="Jane Doe" required />
+        <label htmlFor="register-name" className="mb-1.5 block text-sm font-medium text-foreground">
+          Name
+        </label>
+        <Input id="register-name" value={form.name} onChange={(e) => onChange("name", e.target.value)} placeholder="Jane Doe" autoComplete="name" required />
       </div>
       <div>
-        <label className="mb-1 block text-sm font-medium">Email</label>
-        <Input type="email" value={form.email} onChange={(e) => onChange("email", e.target.value)} placeholder="you@example.com" required />
+        <label htmlFor="register-email" className="mb-1.5 block text-sm font-medium text-foreground">
+          Email
+        </label>
+        <Input id="register-email" type="email" value={form.email} onChange={(e) => onChange("email", e.target.value)} placeholder="you@example.com" autoComplete="email" required />
       </div>
       <div>
-        <label className="mb-1 block text-sm font-medium">Password</label>
-        <Input type="password" value={form.password} onChange={(e) => onChange("password", e.target.value)} placeholder="Minimum 8 characters" required />
+        <label htmlFor="register-password" className="mb-1.5 block text-sm font-medium text-foreground">
+          Password
+        </label>
+        <Input id="register-password" type="password" value={form.password} onChange={(e) => onChange("password", e.target.value)} placeholder="Minimum 8 characters" autoComplete="new-password" required />
       </div>
       <div>
-        <label className="mb-1 block text-sm font-medium">Confirm password</label>
-        <Input type="password" value={form.password_confirmation} onChange={(e) => onChange("password_confirmation", e.target.value)} required />
+        <label htmlFor="register-password-confirmation" className="mb-1.5 block text-sm font-medium text-foreground">
+          Confirm password
+        </label>
+        <Input id="register-password-confirmation" type="password" value={form.password_confirmation} onChange={(e) => onChange("password_confirmation", e.target.value)} autoComplete="new-password" required />
       </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <Button type="submit" disabled={loading} className="w-full">
-        {loading ? "Creating account..." : "Register"}
+      {error ? (
+        <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <Button type="submit" disabled={isRegistering} className="w-full" size="lg">
+        <UserPlusIcon data-icon="inline-start" aria-hidden="true" />
+        {isRegistering ? "Creating account..." : "Register"}
       </Button>
-      <p className="text-sm text-neutral-600">
-        Already have an account? <Link href="/login" className="text-blue-600 hover:underline">Login</Link>
+      <p className="text-center text-sm text-muted-foreground">
+        Already have an account?{" "}
+        <Link href="/login" className="text-primary hover:underline">
+          Login
+        </Link>
       </p>
     </form>
   );

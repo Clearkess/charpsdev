@@ -1,0 +1,20 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { queryKeys } from "@/lib/queryKeys";
+import { useAuthStore } from "@/store/authStore";
+import type { ApiResponse, User } from "@/types/api";
+
+export function useProfileQuery() {
+  const isAuthenticated = useAuthStore((state) => Boolean(state.token));
+
+  return useQuery({
+    queryKey: queryKeys.profile,
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<User>>("/profile");
+      return response.data.data;
+    },
+    enabled: isAuthenticated,
+  });
+}
