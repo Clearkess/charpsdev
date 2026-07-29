@@ -20,6 +20,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import ThemeToggle from "@/components/common/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useUnreadCountQuery } from "@/hooks/queries/useNotificationsQueries";
 import { APP_NAME } from "@/lib/constants";
@@ -224,6 +225,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <TopbarSearch />
             <div className="ml-auto flex items-center gap-3">
               {user?.is_admin ? <Badge variant="secondary">Admin</Badge> : null}
+              <ThemeToggle />
               <Avatar size="sm">
                 <AvatarFallback>{initialsOf(user?.name)}</AvatarFallback>
               </Avatar>

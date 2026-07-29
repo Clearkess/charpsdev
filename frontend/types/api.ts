@@ -64,6 +64,9 @@ export interface Order {
   quantity?: number;
   amount?: number | string;
   price?: number | string;
+  reference?: string;
+  payload?: Record<string, unknown> | null;
+  provider_reference?: string | null;
   details?: Record<string, unknown> | null;
   status: string;
   created_at?: string;
@@ -71,6 +74,8 @@ export interface Order {
   user?: User;
   service?: Service;
 }
+
+export type OrderStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 
 export interface Transaction {
   id: number;
@@ -139,4 +144,11 @@ export interface PaymentInitializeResponse {
 
 export interface WalletListItem extends User {
   wallet: Wallet | null;
+}
+
+/** One day's worth of order-count/revenue data, used by the admin dashboard charts. */
+export interface ChartDataPoint {
+  date: string;
+  orders: number;
+  revenue: number;
 }

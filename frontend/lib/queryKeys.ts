@@ -9,7 +9,9 @@ export const queryKeys = {
   notifications: ["notifications"] as const,
   unreadCount: ["notifications", "unread-count"] as const,
   adminDashboard: ["admin", "dashboard"] as const,
+  adminDashboardChart: ["admin", "dashboard", "chart-data"] as const,
   adminUsers: ["admin", "users"] as const,
   adminServices: ["admin", "services"] as const,
   adminWallets: ["admin", "wallets"] as const,
+  adminOrders: (page: number) => ["admin", "orders", page] as const,
 };

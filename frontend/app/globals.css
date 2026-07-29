@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Class-based dark mode: toggled via `.dark` on <html> (see store/themeStore.ts
+   + components/providers/ThemeScript.tsx), instead of Tailwind v4's default
+   prefers-color-scheme-only variant, so users can override their OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: var(--font-geist-sans), "Segoe UI", Arial, Helvetica, sans-serif;
   --font-heading: var(--font-geist-sans), "Segoe UI", Arial, Helvetica, sans-serif;
@@ -42,6 +47,44 @@
   --radius-md: 0.625rem;
   --radius-lg: 0.875rem;
   --radius-xl: 1.125rem;
+}
+
+.dark {
+  --color-background: #0b1120;
+  --color-foreground: #e2e8f0;
+
+  --color-card: #131b2e;
+  --color-card-foreground: #e2e8f0;
+
+  --color-popover: #131b2e;
+  --color-popover-foreground: #e2e8f0;
+
+  --color-primary: #6366f1;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #1e2436;
+  --color-secondary-foreground: #c7d2fe;
+
+  --color-muted: #1a2236;
+  --color-muted-foreground: #94a3b8;
+
+  --color-accent: #1e2436;
+  --color-accent-foreground: #c7d2fe;
+
+  --color-destructive: #f87171;
+  --color-destructive-foreground: #1c0a0a;
+
+  --color-success: #4ade80;
+  --color-success-foreground: #052e16;
+
+  --color-warning: #fbbf24;
+  --color-warning-foreground: #451a03;
+
+  --color-border: #232b3f;
+  --color-input: #232b3f;
+  --color-ring: #6366f1;
+
+  color-scheme: dark;
 }
 
 * {

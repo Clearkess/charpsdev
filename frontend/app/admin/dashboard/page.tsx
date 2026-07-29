@@ -9,14 +9,18 @@ import {
   UsersIcon,
   WalletIcon,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorBlock, StatCardsSkeleton } from "@/components/common/StateBlock";
-import { useAdminDashboardQuery } from "@/hooks/queries/useAdminQueries";
+import { Skeleton } from "@/components/ui/skeleton";
+import OrdersOverTimeChart from "@/components/charts/OrdersOverTimeChart";
+import RevenueChart from "@/components/charts/RevenueChart";
+import { useAdminDashboardChartQuery, useAdminDashboardQuery } from "@/hooks/queries/useAdminQueries";
 import { extractErrorMessage } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
 
 export default function AdminDashboardPage() {
   const { data, isPending, error } = useAdminDashboardQuery();
+  const chart = useAdminDashboardChartQuery();
 
   if (isPending) return <StatCardsSkeleton count={6} />;
   if (error) return <ErrorBlock message={extractErrorMessage(error, "Failed to load admin dashboard.")} />;
@@ -51,6 +55,38 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Orders over time (30 days)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {chart.isPending ? (
+              <Skeleton className="h-[260px] w-full" />
+            ) : chart.error ? (
+              <ErrorBlock message={extractErrorMessage(chart.error, "Failed to load chart data.")} />
+            ) : (
+              <OrdersOverTimeChart data={chart.data ?? []} />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Revenue over time (30 days)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {chart.isPending ? (
+              <Skeleton className="h-[260px] w-full" />
+            ) : chart.error ? (
+              <ErrorBlock message={extractErrorMessage(chart.error, "Failed to load chart data.")} />
+            ) : (
+              <RevenueChart data={chart.data ?? []} />
+            )}
+          </CardContent>
+        </Card>
       </div>
     </section>
   );
