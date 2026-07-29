@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/StateBlock";
+import PushNotificationsCard from "@/components/common/PushNotificationsCard";
 import { useProfileQuery, useUpdateProfileMutation } from "@/hooks/queries/useProfileQuery";
 import { extractErrorMessage } from "@/lib/api";
 
@@ -135,6 +136,8 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      <PushNotificationsCard />
     </section>
   );
 }
