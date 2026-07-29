@@ -45,5 +45,7 @@ class DatabaseSeeder extends Seeder
             ['user_id' => $user->id],
             ['balance' => 0, 'currency' => 'NGN']
         );
+
+        $this->call(DemoDataSeeder::class);
     }
 }
