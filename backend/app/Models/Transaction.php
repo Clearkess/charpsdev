@@ -14,6 +14,7 @@ class Transaction extends Model
         'status',
         'type',
         'gateway',
+        'description',
     ];
 
     protected $casts = [

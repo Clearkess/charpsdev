@@ -145,6 +145,7 @@ class CheckoutController extends Controller
                     'status' => 'success',
                     'type' => 'purchase',
                     'gateway' => 'wallet',
+                    'description' => 'Purchase: order ' . $reference . ' (' . $cartItems->count() . ' item' . ($cartItems->count() === 1 ? '' : 's') . ')',
                 ]);
 
                 CartItem::where('user_id', $userId)->delete();

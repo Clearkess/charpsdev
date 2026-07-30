@@ -149,6 +149,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/orders/{order}', [AdminOrderController::class, 'update']);
 
         Route::get('/wallets', [AdminWalletController::class, 'index']);
+        Route::get('/wallets/{user}/transactions', [AdminWalletController::class, 'transactions']);
         Route::post('/wallets/{user}/credit', [AdminWalletController::class, 'credit']);
         Route::post('/wallets/{user}/debit', [AdminWalletController::class, 'debit']);
     });

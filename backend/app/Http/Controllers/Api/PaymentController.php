@@ -125,15 +125,24 @@ class PaymentController extends Controller
         return response()->json(['message' => 'Wallet funded.']);
     }
 
+    /**
+     * Phase 2 (Wallet Refinements): previously this only wrote to
+     * `transactions`. `wallet_transactions` (the strict credit/debit ledger
+     * also used by checkout and admin credit/debit) never recorded Paystack
+     * deposits, so it was an incomplete audit trail for anyone reconciling
+     * wallet balance movements from that table alone. Now both tables are
+     * written on every deposit, matching the pattern already used by
+     * CheckoutController and AdminWalletController.
+     */
     private function creditWallet(int $userId, string $reference, float $amount): void
     {
         DB::transaction(function () use ($userId, $reference, $amount) {
-            $wallet = Wallet::firstOrCreate(
-                ['user_id' => $userId],
-                ['balance' => 0, 'currency' => 'NGN']
-            );
+            $wallet = Wallet::query()->where('user_id', $userId)->lockForUpdate()->first();
+            $wallet ??= Wallet::create(['user_id' => $userId, 'balance' => 0, 'currency' => 'NGN']);
 
             $wallet->increment('balance', $amount);
+
+            $description = 'Wallet funded via Paystack';
 
             Transaction::create([
                 'user_id' => $userId,
@@ -142,6 +151,17 @@ class PaymentController extends Controller
                 'status' => 'success',
                 'type' => 'deposit',
                 'gateway' => 'paystack',
+                'description' => $description,
+            ]);
+
+            $wallet->transactions()->create([
+                'wallet_id' => $wallet->id,
+                'user_id' => $userId,
+                'type' => 'credit',
+                'amount' => $amount,
+                'reference' => $reference,
+                'description' => $description,
+                'status' => 'success',
             ]);
         });
     }
