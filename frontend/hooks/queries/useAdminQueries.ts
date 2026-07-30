@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { useAuthStore } from "@/store/authStore";
 import type {
+  Category,
   ChartDataPoint,
   DashboardStats,
   Order,
@@ -71,6 +72,139 @@ export function useAdminServicesQuery() {
       return response.data.services;
     },
     enabled: isAdmin,
+  });
+}
+
+export interface AdminServicePayload {
+  name: string;
+  category_id?: number | null;
+  description?: string | null;
+  price: number;
+  currency?: string;
+  stock?: number | null;
+  provider_id?: number | null;
+  active?: boolean;
+}
+
+export function useAdminServiceCreateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: AdminServicePayload) => {
+      const response = await api.post<{ success: boolean; message: string; service: Service }>(
+        "/admin/services",
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminServices });
+      void queryClient.invalidateQueries({ queryKey: ["services"] });
+    },
+  });
+}
+
+export function useAdminServiceUpdateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ serviceId, ...payload }: Partial<AdminServicePayload> & { serviceId: number }) => {
+      const response = await api.put<{ success: boolean; message: string; service: Service }>(
+        `/admin/services/${serviceId}`,
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminServices });
+      void queryClient.invalidateQueries({ queryKey: ["services"] });
+    },
+  });
+}
+
+export function useAdminServiceDeleteMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (serviceId: number) => {
+      const response = await api.delete<SimpleMessageResponse>(`/admin/services/${serviceId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminServices });
+      void queryClient.invalidateQueries({ queryKey: ["services"] });
+    },
+  });
+}
+
+export function useAdminCategoriesQuery() {
+  const isAdmin = useIsAdmin();
+
+  return useQuery({
+    queryKey: queryKeys.adminCategories,
+    queryFn: async () => {
+      const response = await api.get<{ success: boolean; data: Category[] }>("/admin/categories");
+      return response.data.data;
+    },
+    enabled: isAdmin,
+  });
+}
+
+export interface AdminCategoryPayload {
+  name: string;
+  icon?: string | null;
+  status?: boolean;
+  sort_order?: number;
+}
+
+export function useAdminCategoryCreateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: AdminCategoryPayload) => {
+      const response = await api.post<{ success: boolean; message: string; data: Category }>(
+        "/admin/categories",
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminCategories });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+    },
+  });
+}
+
+export function useAdminCategoryUpdateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ categoryId, ...payload }: Partial<AdminCategoryPayload> & { categoryId: number }) => {
+      const response = await api.put<{ success: boolean; message: string; data: Category }>(
+        `/admin/categories/${categoryId}`,
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminCategories });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+    },
+  });
+}
+
+export function useAdminCategoryDeleteMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (categoryId: number) => {
+      const response = await api.delete<SimpleMessageResponse>(`/admin/categories/${categoryId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminCategories });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+    },
   });
 }
 

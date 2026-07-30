@@ -43,18 +43,73 @@ export interface Wallet {
   user?: User;
 }
 
+export interface Category {
+  id: number;
+  name: string;
+  slug: string;
+  icon?: string | null;
+  status?: boolean;
+  sort_order?: number;
+  created_at?: string;
+  updated_at?: string;
+  active_services_count?: number;
+  services_count?: number;
+}
+
 export interface Service {
   id: number;
   name: string;
   slug?: string;
+  /** Legacy free-text category label, kept for backward compatibility. Always a string (never the relation). */
   category?: string;
+  category_id?: number | null;
+  /**
+   * Eager-loaded Category relation. Backend PHP relation method is named
+   * `categoryGroup()` (to avoid colliding with the legacy `category` string
+   * column above), but Laravel's Eloquent JSON serialization automatically
+   * snake_cases relation keys, so this arrives over the wire as
+   * `category_group` — matching the snake_case convention used by every
+   * other field in this API (`category_id`, `provider_id`, `created_at`, ...).
+   */
+  category_group?: Category | null;
   description?: string | null;
   price: number | string;
+  currency?: string;
+  /** null = unlimited stock. */
+  stock?: number | null;
   active?: boolean;
   provider_id?: number | null;
   provider?: { id: number; name: string } | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface CartItem {
+  id: number;
+  user_id?: number;
+  service_id: number;
+  quantity: number;
+  subtotal?: number | string;
+  created_at?: string;
+  updated_at?: string;
+  service?: Service;
+}
+
+export interface CartResponse {
+  success: boolean;
+  data: CartItem[];
+  total: number;
+}
+
+export interface OrderItem {
+  id: number;
+  order_id?: number;
+  service_id: number;
+  quantity: number;
+  price: number | string;
+  created_at?: string;
+  updated_at?: string;
+  service?: Service;
 }
 
 export interface Order {
@@ -65,6 +120,9 @@ export interface Order {
   amount?: number | string;
   price?: number | string;
   reference?: string;
+  order_number?: string;
+  total?: number | string;
+  payment_method?: string | null;
   payload?: Record<string, unknown> | null;
   provider_reference?: string | null;
   details?: Record<string, unknown> | null;
@@ -73,6 +131,7 @@ export interface Order {
   updated_at?: string;
   user?: User;
   service?: Service;
+  items?: OrderItem[];
 }
 
 export type OrderStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";

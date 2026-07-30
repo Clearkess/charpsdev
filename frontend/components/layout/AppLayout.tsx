@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BellIcon,
+  ClipboardListIcon,
   LayoutDashboardIcon,
   LogOutIcon,
   MenuIcon,
@@ -22,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
+import { useCartQuery } from "@/hooks/queries/useCartQueries";
 import { useUnreadCountQuery } from "@/hooks/queries/useNotificationsQueries";
 import { APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -30,8 +32,9 @@ import { useUiStore } from "@/store/uiStore";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboardIcon },
   { href: "/services", label: "Services", icon: PackageIcon },
+  { href: "/cart", label: "Cart", icon: ShoppingCartIcon },
   { href: "/wallet", label: "Wallet", icon: WalletIcon },
-  { href: "/orders", label: "Orders", icon: ShoppingCartIcon },
+  { href: "/orders", label: "Orders", icon: ClipboardListIcon },
   { href: "/notifications", label: "Notifications", icon: BellIcon },
   { href: "/profile", label: "Profile", icon: UserIcon },
 ];
@@ -46,6 +49,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { user, logout, isLoggingOut } = useAuth();
   const unread = useUnreadCountQuery();
+  const cart = useCartQuery();
+  const cartCount = cart.data?.data.length ?? 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -63,7 +68,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         {navItems.map((item) => {
           const active = pathname === item.href;
           const Icon = item.icon;
-          const showBadge = item.href === "/notifications" && Boolean(unread.data);
+          const badgeCount =
+            item.href === "/notifications" ? unread.data : item.href === "/cart" ? cartCount : 0;
+          const showBadge = Boolean(badgeCount);
           return (
             <Link
               key={item.href}
@@ -82,7 +89,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               </span>
               {showBadge ? (
                 <Badge variant={active ? "secondary" : "default"} className="h-5 min-w-5 justify-center px-1.5">
-                  {unread.data}
+                  {badgeCount}
                 </Badge>
               ) : null}
             </Link>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ShoppingCartIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,8 @@ export default function OrdersPage() {
   const orders = useOrdersQuery();
   const services = useServicesQuery();
   const createOrder = useCreateOrderMutation();
+  const searchParams = useSearchParams();
+  const placedOrderId = searchParams.get("placed");
   const [serviceId, setServiceId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [message, setMessage] = useState<string | null>(null);
@@ -54,10 +57,21 @@ export default function OrdersPage() {
 
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className="font-heading text-3xl font-bold">Orders</h1>
-        <p className="mt-2 text-muted-foreground">Create new orders and track their status.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-heading text-3xl font-bold">Orders</h1>
+          <p className="mt-2 text-muted-foreground">Create new orders and track their status.</p>
+        </div>
+        <Button render={<Link href="/cart" />} variant="outline" size="sm">
+          <ShoppingCartIcon data-icon="inline-start" aria-hidden="true" />
+          View cart
+        </Button>
       </div>
+      {placedOrderId ? (
+        <div className="rounded-xl border border-success/20 bg-success/10 p-4 text-sm text-success">
+          Order #{placedOrderId} placed successfully via checkout.
+        </div>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Create order</CardTitle>
@@ -103,8 +117,8 @@ export default function OrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Service</TableHead>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Item(s)</TableHead>
                   <TableHead>Quantity</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
@@ -112,20 +126,28 @@ export default function OrdersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell>#{order.id}</TableCell>
-                    <TableCell>{order.service?.name || order.service_id || "—"}</TableCell>
-                    <TableCell>{order.quantity ?? "—"}</TableCell>
-                    <TableCell>{formatCurrency(order.amount ?? order.price ?? 0)}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant(order.status)} className="capitalize">
-                        {order.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatDate(order.created_at)}</TableCell>
-                  </TableRow>
-                ))}
+                {rows.map((order) => {
+                  const itemNames = order.items?.length
+                    ? order.items.map((item) => item.service?.name || `#${item.service_id}`).join(", ")
+                    : order.service?.name || order.service_id || "—";
+                  const totalQuantity = order.items?.length
+                    ? order.items.reduce((sum, item) => sum + item.quantity, 0)
+                    : (order.quantity ?? "—");
+                  return (
+                    <TableRow key={order.id}>
+                      <TableCell>{order.order_number || `#${order.id}`}</TableCell>
+                      <TableCell className="max-w-xs truncate">{itemNames}</TableCell>
+                      <TableCell>{totalQuantity}</TableCell>
+                      <TableCell>{formatCurrency(order.total ?? order.amount ?? order.price ?? 0)}</TableCell>
+                      <TableCell>
+                        <Badge variant={statusVariant(order.status)} className="capitalize">
+                          {order.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatDate(order.created_at)}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
