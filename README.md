@@ -164,3 +164,69 @@ The Next.js frontend uses the following stack for data fetching, state, UI, and 
 - **Verified live**: `POST /api/orders` now returns `201` with a real order record (quantity included), and `GET /api/orders` lists it correctly. Test order was set to `cancelled` afterward as cleanup (no delete-order endpoint exists in the API).
 - **Lesson for future sessions**: when a "Server Error" is reported from the frontend, go straight to Railway `deploymentLogs` for the real exception rather than guessing from `AdminOrderController` changes in the most recent deploy — in this case the bug long predated today's push-notification work and simply hadn't been exercised by the "Quick Wins" testing pass earlier.
 
+## 8) Phase 1 — Core Marketplace (categories, cart, checkout)
+
+This is the first phase of a broader 10-phase roadmap to evolve CharpsDev into a full digital marketplace. Phase 1 was built **additively** on top of the existing schema (wallet, orders, Paystack, admin panel, push notifications are all untouched) and was fully built and tested against a **local SQLite dev environment** before being considered for production, specifically to avoid repeating the earlier "Server Error" migration incident (see section 7 above).
+
+### What's new
+
+**Categories.** A real `categories` table (`name`, `slug`, `icon`, `status`, `sort_order`) replaces the old free-text `services.category` string as the primary way services are organized, while keeping the old string column for backward compatibility. Seeded categories: Facebook Accounts, Instagram Accounts, TikTok Accounts, Twitter/X Accounts, Email Accounts, Streaming Accounts, Gift Cards, Digital Products.
+
+**Services.** `services` gained nullable `category_id` (FK → `categories`), `stock` (nullable = unlimited/instant-delivery, otherwise a hard inventory count enforced on cart-add and checkout), and `currency`. The legacy `category` string column is still written on create/update (derived from `category_id` when only that's supplied) so nothing that reads the old column breaks.
+
+**Shopping cart.** A `cart_items` table (`user_id`, `service_id`, `quantity`) backs a full add/update/remove/clear flow with per-item stock validation and ownership checks, so users can add multiple services before paying.
+
+**Multi-item checkout.** `orders` gained `order_number`, `total`, `payment_method`, plus nullable `service_id`/`quantity` (kept nullable rather than dropped, for backward compatibility with the pre-existing single-item order flow). A new `order_items` table (`order_id`, `service_id`, `quantity`, `price`) captures each line item. Checkout is fully transactional: it row-locks (`lockForUpdate()`) the user's wallet and every service being purchased, debits the wallet, decrements stock, creates one `Order` + N `OrderItem`s, writes both a `wallet_transactions` row (`type=debit`) and a `transactions` row (`type=purchase`), clears the cart, and fires a notification — all inside one DB transaction so a failure anywhere rolls back everything.
+
+**The old single-item "Create order" flow (`POST /api/orders`) still works unchanged** — it was deliberately left in place alongside the new cart/checkout flow rather than removed, so both currently coexist in the UI (Orders page still has the old create form; Services page now also has "Add to cart" buttons). Reconciling/simplifying this into one flow is a candidate follow-up, not yet done.
+
+### New/changed API endpoints
+
+| Method | Endpoint | Notes |
+|---|---|---|
+| GET | `/api/categories` | Public list of active categories |
+| GET | `/api/admin/categories` | Admin list (all categories, with service counts) |
+| POST | `/api/admin/categories` | Create a category |
+| PUT | `/api/admin/categories/{id}` | Update a category (e.g. toggle `status` to hide/show) |
+| DELETE | `/api/admin/categories/{id}` | Delete a category |
+| GET | `/api/services?category_id=` | Filter services by category id |
+| GET | `/api/services?category=` | Filter by category slug **or** legacy category string |
+| GET | `/api/cart` | List the current user's cart items (`total` = sum of subtotals) |
+| POST | `/api/cart` | Add a service to the cart (`service_id`, `quantity`), stock-checked |
+| PUT | `/api/cart/{id}` | Update a cart item's quantity |
+| DELETE | `/api/cart/{id}` | Remove one cart item |
+| DELETE | `/api/cart` | Clear the entire cart |
+| POST | `/api/checkout` | Transactional checkout of the whole cart against the wallet balance |
+| GET/POST/PUT/DELETE | `/api/admin/services` | Now accepts/returns `category_id`, `currency`, `stock` |
+
+### A note on the `categoryGroup` relation name
+
+`Service` has a `categoryGroup()` `BelongsTo(Category::class, 'category_id')` relation — deliberately **not** named `category()`, because that name collides with the pre-existing legacy `category` string column. Eloquent lets an eager-loaded relation silently overwrite a same-named raw attribute during `toArray()`/JSON serialization, which would make `category` unpredictably either a string or an object depending on what was eager-loaded on a given request. Over the wire, Eloquent automatically snake-cases relation keys, so this relation appears in every JSON response as **`category_group`** (not `categoryGroup`) — consistent with the snake_case convention used by every other field in this API (`category_id`, `provider_id`, `created_at`, ...). The frontend `Service` type reflects this: `category_group?: Category | null` alongside the always-a-string legacy `category?: string`.
+
+### Local dev environment
+
+Phase 1 was built and verified against a local SQLite database, not the production Postgres DB:
+
+```env
+# backend/.env (local only — gitignored, never committed)
+APP_ENV=local
+APP_DEBUG=true
+DB_CONNECTION=sqlite
+DB_DATABASE=/absolute/path/to/backend/database/database.sqlite
+```
+
+```bash
+cd backend
+touch database/database.sqlite   # if it doesn't exist yet
+php artisan migrate:fresh --seed --force
+php artisan serve --host=127.0.0.1 --port=8787
+```
+
+Both `.env` and `database/database.sqlite` are gitignored (confirmed via `git check-ignore -v`) and were never committed.
+
+### Verification performed
+
+Full curl-based end-to-end pass against the local server: categories list, services list with both `category_id` and category-slug filters, cart add/get/update with stock-limit rejection, checkout (wallet debit verified exact amount, stock decrement verified, cart cleared, `wallet_transactions.type=debit` + `transactions.type=purchase` correctly split, notification fired), insufficient-balance checkout correctly rejected (cart/wallet/stock left untouched), the legacy single-item `POST /api/orders` endpoint confirmed still working, admin categories full CRUD (create/list/update/hide/delete), admin services list with `category_group` eager-loaded. Frontend `npm run build` (Next.js 16 + Turbopack) compiles cleanly with zero TypeScript errors across all 25 routes, including the two new pages (`/cart`, `/admin/categories`).
+
+**Not yet done**: this phase has not been deployed to Railway/Vercel production yet — it exists only as committed, locally-verified code on `main`, pending an explicit decision to deploy. Phases 2–10 of the roadmap (wallet refinements, additional payment gateways, Providers/Coupons/Settings admin pages, product delivery emails, provider API sync, more notification triggers, analytics, user-facing features, and additional security hardening) are intentionally not started, per the user's explicit sequencing.
+
