@@ -17,6 +17,7 @@ export const queryKeys = {
   adminServices: ["admin", "services"] as const,
   adminCategories: ["admin", "categories"] as const,
   adminWallets: ["admin", "wallets"] as const,
+  adminWalletTransactions: (userId: number, page: number) => ["admin", "wallets", userId, "transactions", page] as const,
   adminOrders: (page: number) => ["admin", "orders", page] as const,
   pushPublicKey: ["push", "public-key"] as const,
 };

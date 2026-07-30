@@ -78,9 +78,11 @@ export default function WalletPage() {
                 onChange={(e) => setAmount(e.target.value)}
                 type="number"
                 min="100"
+                max="5000000"
                 step="1"
                 aria-label="Amount to fund"
               />
+              <p className="text-xs text-muted-foreground">Min ₦100, max ₦5,000,000 per deposit.</p>
               <Button type="submit" disabled={initializePayment.isPending} className="w-full">
                 {initializePayment.isPending ? "Initializing..." : "Initialize payment"}
               </Button>
@@ -116,6 +118,7 @@ export default function WalletPage() {
                 <TableRow>
                   <TableHead>Reference</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Description</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
@@ -126,6 +129,9 @@ export default function WalletPage() {
                   <TableRow key={transaction.id}>
                     <TableCell>{transaction.reference || `#${transaction.id}`}</TableCell>
                     <TableCell className="capitalize">{transaction.type}</TableCell>
+                    <TableCell className="max-w-xs truncate text-muted-foreground">
+                      {transaction.description || "—"}
+                    </TableCell>
                     <TableCell>{formatCurrency(transaction.amount)}</TableCell>
                     <TableCell>
                       <Badge variant={statusVariant(transaction.status)} className="capitalize">

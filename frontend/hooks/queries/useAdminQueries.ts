@@ -13,6 +13,7 @@ import type {
   PaginatedResponse,
   Service,
   SimpleMessageResponse,
+  Transaction,
   User,
   WalletListItem,
 } from "@/types/api";
@@ -283,15 +284,50 @@ export function useAdminWalletActionMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, action, amount }: { userId: number; action: "credit" | "debit"; amount: number }) => {
+    mutationFn: async ({
+      userId,
+      action,
+      amount,
+      reason,
+    }: {
+      userId: number;
+      action: "credit" | "debit";
+      amount: number;
+      reason?: string;
+    }) => {
       const response = await api.post<{ success: boolean; balance: number | string; message?: string }>(
         `/admin/wallets/${userId}/${action}`,
-        { amount },
+        { amount, reason },
       );
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminWallets });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "wallets", variables.userId, "transactions"] });
     },
+  });
+}
+
+/**
+ * Phase 2 (Wallet Refinements): per-user transaction drill-down for the
+ * admin wallets page, backed by GET /admin/wallets/{user}/transactions
+ * (reads the same `transactions` table the user's own Wallet page reads,
+ * so what an admin sees for a user matches what that user sees for
+ * themselves).
+ */
+export function useAdminWalletTransactionsQuery(userId: number | null, page: number = 1) {
+  const isAdmin = useIsAdmin();
+
+  return useQuery({
+    queryKey: queryKeys.adminWalletTransactions(userId ?? 0, page),
+    queryFn: async () => {
+      const response = await api.get<{ success: boolean; data: PaginatedResponse<Transaction> }>(
+        `/admin/wallets/${userId}/transactions`,
+        { params: { page } },
+      );
+      return response.data.data;
+    },
+    enabled: isAdmin && userId !== null,
+    placeholderData: keepPreviousData,
   });
 }
