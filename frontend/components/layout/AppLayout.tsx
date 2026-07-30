@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ThemeToggle from "@/components/common/ThemeToggle";
+import BottomNav from "@/components/layout/BottomNav";
 import { useAuth } from "@/hooks/useAuth";
 import { useCartQuery } from "@/hooks/queries/useCartQueries";
 import { useUnreadCountQuery } from "@/hooks/queries/useNotificationsQueries";
@@ -239,11 +240,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          <main id="main-content" className="flex-1 p-4 md:p-8">
+          <main id="main-content" className="flex-1 p-4 pb-24 md:p-8 md:pb-8">
             {children}
           </main>
         </div>
       </div>
+
+      <BottomNav />
     </div>
   );
 }
