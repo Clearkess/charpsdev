@@ -241,3 +241,49 @@ Phase 1 has been deployed to production — both backend (Railway) and frontend 
 
 Phases 2–10 of the roadmap (wallet refinements, additional payment gateways, Providers/Coupons/Settings admin pages, product delivery emails, provider API sync, more notification triggers, analytics, user-facing features, and additional security hardening) are intentionally not started, per the user's explicit sequencing.
 
+## 9) Phase 2 — Wallet Refinements
+
+Second phase of the 10-phase roadmap. Built additively on top of Phase 1's checkout/wallet code, tested locally against SQLite first (same discipline as Phase 1), and **not yet deployed to production** as of this writing.
+
+### The bug this phase fixes
+
+Two separate ledger tables existed for wallet activity: `transactions` (read by the user-facing `GET /api/wallet/transactions` on the Wallet page) and `wallet_transactions` (a stricter credit/debit ledger, also used for balance bookkeeping). Historically only `CheckoutController` wrote to both tables on a purchase. `PaymentController::creditWallet()` (Paystack deposits) wrote **only** to `transactions`, and `AdminWalletController::credit()`/`debit()` wrote **only** to `wallet_transactions` — meaning any admin-initiated balance adjustment was completely invisible on the affected user's own Wallet page, even though their balance had actually changed. This was a real, pre-existing bug discovered while scoping Phase 2, not a new regression.
+
+### What changed
+
+**Unified ledger.** `AdminWalletController::credit()`/`debit()` now write to **both** `wallet_transactions` and `transactions` inside the same DB transaction, row-locking the wallet (`lockForUpdate()`) exactly like `CheckoutController` already did. `PaymentController::creditWallet()` (Paystack) was fixed the same way, so all three money-movement paths — purchase, deposit, admin adjustment — now keep both ledgers in sync.
+
+**Transaction descriptions.** `transactions` gained a nullable `description` column (migration `2026_07_30_010000_add_description_to_transactions_table.php`, guarded with `hasColumn`, additive/non-destructive). Populated as: `"Purchase: order {reference} (N item(s))"` for checkout, `"Wallet funded via Paystack"` for deposits, and the admin-supplied `reason` (or a sensible default) for admin credit/debit. Shown as a new "Description" column on the user Wallet page.
+
+**Admin reason + drill-down.** Admin credit/debit now accepts an optional `reason` (validated, max 255 chars) surfaced as a "Reason (optional)" input on the Admin Wallets page. A new "History" toggle per row expands an inline panel (no Dialog/Modal component exists in this codebase yet, so this follows the existing inline-`<Card>` convention rather than introducing one) showing that user's paginated transaction history via the new drill-down endpoint.
+
+**Deposit bounds.** `DepositRequest` already enforced `min:100`; added `max:5000000` so a single Paystack deposit can't exceed ₦5,000,000.
+
+**Insufficient-balance handling.** `AdminWalletController::debit()` now wraps the balance check in `ValidationException::withMessages(['amount' => 'Insufficient balance.'])` inside the `DB::transaction()` closure, so an over-debit cleanly rolls back and surfaces a 422 instead of partially applying.
+
+### New/changed API endpoints
+
+| Method | Endpoint | Notes |
+|---|---|---|
+| GET | `/api/admin/wallets/{user}/transactions` | New — paginated (20/page) transaction history for one user, admin-only |
+| POST | `/api/admin/wallets/{user}/credit` | Now accepts optional `reason`; writes to both ledgers |
+| POST | `/api/admin/wallets/{user}/debit` | Now accepts optional `reason`; writes to both ledgers; rejects with 422 on insufficient balance (no partial effect) |
+
+### Self-introduced bug caught during local testing
+
+`AdminWalletController::debit()` initially called `$user->wallet()->fresh()->balance` to report the post-debit balance, which throws `BadMethodCallException` because `fresh()` doesn't exist on a `HasOne` relation object (only on a loaded model instance). Confirmed via curl that the underlying DB transaction had actually succeeded (balance correctly changed in the database) despite the request returning a 500 — the bug was purely in the response-formatting line. Fixed to `$user->wallet()->first()->balance` and re-verified.
+
+### Verification performed (local SQLite only)
+
+Admin credit/debit with and without a reason; insufficient-balance debit correctly rejected with balance left untouched; reason field's 255-char max enforced; deposit `min:100`/`max:5000000` bounds enforced; Paystack deposit path exercised via a `php artisan tinker` reflection call (no live Paystack keys in local dev) and confirmed it now writes both `transactions` and `wallet_transactions`; Phase 1's full checkout flow re-verified end-to-end still working, now with the `description` field populated on the resulting transaction; the new `/api/admin/wallets/{user}/transactions` endpoint confirmed admin-only (a non-admin user gets 403). Frontend `npm run build` (Next.js 16 + Turbopack) compiles cleanly with zero TypeScript errors across all 25 routes.
+
+### Known gap in this pass
+
+The originally-approved Phase 2 scope also included linking a purchase-type transaction on the user Wallet page to its underlying order (so a user could click through from "Purchase: order ORD-..." to that order's detail). This was **not implemented** in this pass — only the plain `description` text was added, with no clickable link/navigation yet. Candidate for a follow-up pass.
+
+### Deployment status
+
+Committed locally as `9527c2d` (backend) and `1e7ddeb` (frontend), pushed to `origin/main`. **Not yet deployed to Railway or production Vercel** — Phase 2 has been built and verified locally only, matching the "test locally first, deploy only on explicit instruction" pattern established in Phase 1. Railway/Vercel production currently still serve Phase 1 (commit `a4c0063`/`a7c5d62`).
+
+Phases 3–10 of the roadmap remain intentionally not started.
+
