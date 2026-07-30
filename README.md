@@ -287,3 +287,39 @@ Committed locally as `9527c2d` (backend) and `1e7ddeb` (frontend), pushed to `or
 
 Phases 3–10 of the roadmap remain intentionally not started.
 
+## 10) Services Page Redesign (Tnxverify-inspired) + Mobile Bottom Nav
+
+Frontend-only UX redesign, requested independently of the phase roadmap above. No backend/API changes — all data (services, categories, prices, stock, category icons) was already available via existing endpoints.
+
+### What changed
+
+**Featured Services banner.** A horizontally-scrollable row of up to 6 active services appears at the top of the Services page, shown only when no search term or category filter is active.
+
+**Category chips.** A horizontally-scrollable pill row ("All" + every active category, each with its icon and a service-count badge) sits directly below the search bar.
+
+**Redesigned service cards.** Smaller cards in a responsive 2/3/4-column grid, each showing a brand/category icon bubble, the service name, an out-of-stock/low-stock badge where relevant, a price tag, and a circular chevron affordance in the corner to signal the whole card is tappable (tapping adds the service to the cart, same behavior as before — only the visual design changed).
+
+**"Starting from ₦..." pricing label.** Services whose legacy `category` is `vtu`, `utility`, or `esim` (base/minimum-price, top-up-style products where the actual amount is chosen at purchase time) now show "Starting from ₦X" instead of a flat price. Implemented via `hasVariablePricing()` in `frontend/lib/serviceIcons.tsx`.
+
+**Icon resolution.** New `frontend/lib/serviceIcons.tsx` resolves an icon for each service/category through a fallback chain: (1) brand-keyword match against the service name (e.g. "Netflix Premium" → actual Netflix glyph), (2) the linked category's seeded `icon` string, (3) the legacy `category` enum string, (4) a generic package icon. Brand glyphs (Facebook, Instagram, TikTok, WhatsApp, Telegram, Netflix, Spotify, etc.) come from `react-icons/si` (Simple Icons) — added as a new dependency (`react-icons@^5.7.0`) because `lucide-react` has no brand/logo icons.
+
+**Mobile bottom navigation.** New `frontend/components/layout/BottomNav.tsx`: a fixed, mobile-only (`md:hidden`) bottom tab bar with exactly 5 items — Home, Services, Orders, Wallet, Profile — with iOS safe-area padding. Wired into `AppLayout.tsx`; the page content area gained `pb-24` on mobile so it isn't obscured by the bar.
+
+### Files touched
+
+| File | Change |
+|---|---|
+| `frontend/lib/serviceIcons.tsx` | New — icon-resolution + variable-pricing helpers |
+| `frontend/components/layout/BottomNav.tsx` | New — mobile bottom tab bar |
+| `frontend/components/layout/AppLayout.tsx` | Renders `BottomNav`; adjusted content padding |
+| `frontend/app/(dashboard)/services/page.tsx` | Rewritten — banner, chips, redesigned cards |
+| `frontend/package.json` / `package-lock.json` | Added `react-icons` dependency |
+
+### Verification performed (local dev only)
+
+`npm run build` succeeds with zero TypeScript errors across all routes including `/services`. Exercised the full auth pipeline locally (backend on `:8787`, frontend on `:3000`) via a temporary QA harness (deleted before commit) to confirm `/services` renders `200` past both the Next.js middleware and the client-side `ProtectedRoute` guard, and that the rendered page contains the redesigned markup with no client-side console/hydration errors beyond the expected dev-only HMR WebSocket noise.
+
+### Deployment status
+
+Committed as `95b4a15`, pushed to `origin/main`. **Not deployed to production Vercel/Railway** — matches the "test locally first, deploy only on explicit instruction" pattern used throughout this project. Production currently still serves the last deployed Phase 1 build.
+
