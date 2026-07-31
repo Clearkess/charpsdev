@@ -8,8 +8,11 @@ use App\Models\Coupon;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Service;
+use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
+use App\Services\NotificationService;
 use App\Services\WebPushService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +32,7 @@ class CheckoutController extends Controller
      * wallet and each service, so concurrent checkouts / stock races can't
      * result in a negative balance or oversold stock.
      */
-    public function store(Request $request, WebPushService $webPush)
+    public function store(Request $request, WebPushService $webPush, NotificationService $notifications)
     {
         $userId = $request->user()->id;
 
@@ -55,8 +58,15 @@ class CheckoutController extends Controller
 
         $couponCode = $request->filled('coupon_code') ? Str::upper(trim($request->input('coupon_code'))) : null;
 
+        // Phase 6 (more notification triggers): populated (by reference)
+        // whenever this checkout's stock decrement causes a service to cross
+        // from above to at-or-below Service::LOW_STOCK_THRESHOLD, so admins
+        // can be alerted once the transaction safely commits, without having
+        // to re-derive "before" stock levels afterwards.
+        $lowStockAlerts = [];
+
         try {
-            $order = DB::transaction(function () use ($cartItems, $userId, $request, $couponCode) {
+            $order = DB::transaction(function () use ($cartItems, $userId, $request, $couponCode, &$lowStockAlerts) {
                 // Lock every affected service row to prevent concurrent
                 // checkouts from overselling limited stock.
                 $lockedServices = \App\Models\Service::query()
@@ -148,7 +158,13 @@ class CheckoutController extends Controller
                     ]);
 
                     if ($service->stock !== null) {
+                        $stockBefore = $service->stock;
+                        $stockAfter = $stockBefore - $item->quantity;
                         $service->decrement('stock', $item->quantity);
+
+                        if ($stockBefore > Service::LOW_STOCK_THRESHOLD && $stockAfter <= Service::LOW_STOCK_THRESHOLD) {
+                            $lowStockAlerts[] = ['name' => $service->name, 'stock' => $stockAfter];
+                        }
                     }
                 }
 
@@ -202,6 +218,28 @@ class CheckoutController extends Controller
             'body' => "Order {$order->reference} has been placed.",
             'url' => '/orders/' . $order->id,
         ]);
+
+        // Phase 6 (more notification triggers): admin-facing rather than
+        // user-facing - tells every admin, once per checkout that pushes a
+        // service at or below Service::LOW_STOCK_THRESHOLD, so they can
+        // restock before it hits zero. Fired outside the transaction (stock
+        // is already committed) and guarded so a checkout that doesn't
+        // cross the threshold never touches this at all.
+        if (! empty($lowStockAlerts)) {
+            $summary = collect($lowStockAlerts)
+                ->map(fn ($alert) => "{$alert['name']} ({$alert['stock']} left)")
+                ->implode(', ');
+
+            foreach (User::where('is_admin', true)->get() as $admin) {
+                $notifications->notify(
+                    $admin,
+                    'stock',
+                    'Low stock alert',
+                    "The following item(s) are running low on stock: {$summary}.",
+                    '/admin/services',
+                );
+            }
+        }
 
         return response()->json([
             'success' => true,

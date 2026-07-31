@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -40,7 +41,7 @@ class AdminWalletController extends Controller
         ]);
     }
 
-    public function credit(Request $request, User $user)
+    public function credit(Request $request, User $user, NotificationService $notifications)
     {
         $request->validate([
             'amount' => 'required|numeric|min:1',
@@ -87,13 +88,25 @@ class AdminWalletController extends Controller
             ]);
         });
 
+        // Phase 6 (more notification triggers): an admin-initiated credit
+        // previously updated the balance and both ledgers (Phase 2's fix)
+        // but never told the affected user at all.
+        $notifications->notify(
+            $user,
+            'wallet',
+            'Wallet credited',
+            'Your wallet was credited with ' . number_format((float) $request->amount, 2) . ' NGN by an admin'
+                . ($reason ? " ({$reason})." : '.'),
+            '/wallet',
+        );
+
         return response()->json([
             'success' => true,
             'balance' => $user->wallet()->first()->balance,
         ]);
     }
 
-    public function debit(Request $request, User $user)
+    public function debit(Request $request, User $user, NotificationService $notifications)
     {
         $request->validate([
             'amount' => 'required|numeric|min:1',
@@ -101,9 +114,10 @@ class AdminWalletController extends Controller
         ]);
 
         $reason = $request->input('reason');
+        $debited = false;
 
         try {
-            DB::transaction(function () use ($request, $user, $reason) {
+            DB::transaction(function () use ($request, $user, $reason, &$debited) {
                 $wallet = Wallet::query()
                     ->where('user_id', $user->id)
                     ->lockForUpdate()
@@ -140,12 +154,31 @@ class AdminWalletController extends Controller
                     'gateway' => 'admin',
                     'description' => $description,
                 ]);
+
+                $debited = true;
             });
         } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => collect($e->errors())->flatten()->first() ?? 'Debit failed.',
             ], 422);
+        }
+
+        // Phase 6 (more notification triggers): mirrors the credit()
+        // notification above. Guarded by $debited (only set true once the
+        // transaction body actually runs to completion) so an
+        // insufficient-balance rejection above never reaches this point in
+        // the first place (the try/catch's early return already handles
+        // that) - this flag just documents the invariant explicitly.
+        if ($debited) {
+            $notifications->notify(
+                $user,
+                'wallet',
+                'Wallet debited',
+                'Your wallet was debited ' . number_format((float) $request->amount, 2) . ' NGN by an admin'
+                    . ($reason ? " ({$reason})." : '.'),
+                '/wallet',
+            );
         }
 
         return response()->json([

@@ -436,3 +436,43 @@ This project has **no queue worker process** anywhere in its Railway deployment 
 ### Deployment status / production note
 
 Not yet deployed to production. **Important caveat for whenever this does deploy**: production's `MAIL_MAILER` is currently also set to `log` (see `.env.railway.example`), meaning emails are written to the server log, not actually delivered to customers' inboxes, until real SMTP/mailer credentials (e.g. `MAIL_MAILER=smtp` + a provider like Mailgun/Resend/SES, or `MAIL_MAILER=postmark`) are configured on Railway. The feature is fully built and will work correctly the moment real mail credentials are set — no code changes needed.
+
+## 14) Phase 6 — More Notification Triggers
+
+Sixth phase of the 10-phase roadmap. Built additively on top of Phases 1–5 (checkout, wallet, coupons, settings, delivery emails all untouched), tested locally against SQLite first, and **not yet deployed to production** as of this writing. No new migrations were needed — the `notifications` table (columns: `user_id`, `title`, `message`, `type`, `is_read`) already existed but was populated in exactly one place in the whole app.
+
+### The gap this phase fixes
+
+Before this phase, `App\Models\Notification` (the in-app row behind the Notifications page and unread-count badge) was only ever created by `CheckoutController::store()` on "order placed". Every other money-moving or status-changing event fired **nothing at all**, or push-only with no in-app record:
+- A Paystack wallet deposit (`PaymentController::verify()`/`webhook()`) silently updated the balance and both ledgers (Phase 2) — the user only found out by noticing a new balance next time they opened the Wallet page.
+- An admin wallet credit/debit (`AdminWalletController::credit()`/`debit()`) — same silent gap.
+- An order status change in the admin panel (`AdminOrderController::update()`) fired a **push** notification only (a no-op locally with no VAPID keys configured, and easy to miss in production if the device isn't subscribed) — nothing landed on the in-app Notifications page for `processing`/`completed`/`failed`/`cancelled` transitions, unlike "order placed" which does both.
+
+### What was built
+
+- `App\Services\NotificationService::notify(User $user, string $type, string $title, string $message, string $url = '/notifications')` — a single new method that writes the in-app `Notification` row **and** best-effort pushes it via the existing `WebPushService`, so every future trigger writes both halves instead of a controller hand-rolling (and inevitably forgetting one half of) the pair. `type` is free-text with no DB-level enum/CHECK constraint, so new categories (`wallet`, `stock`, etc., alongside the pre-existing `order`) never require a migration.
+- **Wallet deposit** (`PaymentController::creditWallet()`, shared by both the `verify()` redirect-callback path and the `webhook()` path): fires a `type: wallet` "Wallet funded" notification for the exact deposited amount, after the DB transaction commits (a notify failure can never roll back a successful credit).
+- **Admin wallet credit/debit** (`AdminWalletController::credit()`/`debit()`): fires a `type: wallet` "Wallet credited"/"Wallet debited" notification including the admin's optional reason text. `debit()` is guarded so an insufficient-balance rejection (which already short-circuits via its existing `ValidationException`/422 response) never reaches the notify call.
+- **Order status change** (`AdminOrderController::update()`): the existing push-only call was replaced with a call through `NotificationService`, so every real transition (guarded by the pre-existing `$previousStatus !== $order->status` check — a same-status re-save is still correctly a no-op) now also writes an in-app row, with a status-specific message (`processing`/`completed`/`failed`/`cancelled`, plus a generic fallback for any other value). This is independent of and does not interfere with Phase 5's `OrderDeliveredNotification` email, which still fires separately on completion.
+- **Low stock alert (new, admin-facing)** (`CheckoutController::store()`): a bonus trigger rounding out "more notification triggers" beyond user-facing wallet/order events. `Service::LOW_STOCK_THRESHOLD` (a class constant, `= 5`) is checked at the exact moment a checkout's stock decrement crosses from *above* the threshold to *at-or-below* it (captured via a by-reference `$lowStockAlerts` array inside the checkout's `DB::transaction()` closure, so the "before" stock value doesn't need re-deriving afterwards). Every admin (`User::where('is_admin', true)`) gets one `type: stock` "Low stock alert" notification per checkout that crosses the threshold, listing every affected service and its remaining stock in one message. Deliberately a plain class constant rather than a Phase 4 `Setting` — unlike `support_email`/deposit bounds, this isn't something expected to need runtime tuning; revisit as a `Setting` if that assumption changes. Services with `stock === null` (unlimited/instant-digital-delivery) are correctly never considered.
+
+### Frontend
+
+- **Notifications page** (`/notifications`): each row's icon now reflects its `type` (`wallet` → wallet icon, `stock` → alert-triangle icon, `order` → package icon, anything else → the original generic bell) via a small `notificationIcon()` helper, instead of every row showing the same bell regardless of what actually happened. No new types were added to `types/api.ts` — `NotificationItem.type` was already `string | undefined`.
+
+### Verification performed (local SQLite + local dev server only)
+
+- `php -l` clean on all new/changed files; no migrations needed (schema already supported everything).
+- Logged in as both admin and a regular user against `php artisan serve` and inspected the actual `notifications` table rows (plus the live API responses) after each action:
+  - Admin credit (₦500) → exactly one `type: wallet` "Wallet credited" row with the reason text included; admin debit (₦200) → exactly one `type: wallet` "Wallet debited" row.
+  - Admin debit for an amount exceeding the balance → correctly rejected 422 (`Insufficient balance.`) with **zero** new notification rows (confirmed via a before/after count).
+  - Paystack deposit path exercised via a `php artisan tinker` reflection call against the now-4-argument private `creditWallet()` (no live Paystack keys in local dev, same technique used for this method in Phase 2) → confirmed a `type: wallet` "Wallet funded" row for the exact deposited amount.
+  - Order status transitions: `pending → processing` (new row, correct message), immediately resubmitting the identical `processing` status (correctly **zero** new rows — idempotency preserved), `pending → cancelled` (new row, correct message), `processing → completed` with delivery content (new `type: order` row **and** confirmed Phase 5's delivery email still fires independently in `storage/logs/laravel.log`), `failed → failed` resubmit (correctly zero new rows), `failed → processing → failed` (two new rows, one per real transition, with the right status-specific message each time).
+  - `GET /api/notifications` and `GET /api/notifications/unread-count` (user-facing) confirmed to correctly surface all the new `wallet`/`order` rows and their accurate unread count with no serialization changes needed.
+  - Low stock: set a real service's stock to 7 (above the threshold of 5), checked out a quantity of 3 (→ stock 4, crossing the threshold) → exactly one `type: stock` "Low stock alert" notification created, addressed to the one admin user in the local dataset, listing the correct service name and remaining-stock count. A follow-up purchase of 1 more unit (stock 4 → 3, already below threshold, no re-crossing) correctly created **zero** additional low-stock notifications (no spam). Service stock was restored to its seeded value (25) afterward as test cleanup.
+- `php artisan test` — 2/2 passing, no regressions.
+- `npm run build` (Next.js 16 + Turbopack) — compiles cleanly with **zero TypeScript errors** across all 28 routes.
+
+### Deployment status
+
+Not yet deployed to production (Railway backend / Vercel frontend) — built and verified locally only, per the same discipline followed for every prior phase. Awaiting explicit instruction to deploy. Unlike Phase 5, this phase has **no production caveat**: in-app notifications and push (already a safe no-op without VAPID keys configured, exactly as before this phase) both work identically in local dev and production with no environment-specific behavior.

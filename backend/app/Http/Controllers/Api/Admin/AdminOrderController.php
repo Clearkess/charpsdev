@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Notifications\OrderDeliveredNotification;
-use App\Services\WebPushService;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -30,7 +30,7 @@ class AdminOrderController extends Controller
         ]);
     }
 
-    public function update(Request $request, Order $order, WebPushService $webPush)
+    public function update(Request $request, Order $order, NotificationService $notifications)
     {
         $data = $request->validate([
             'status' => [
@@ -83,16 +83,20 @@ class AdminOrderController extends Controller
             }
         }
 
+        // Phase 6 (more notification triggers): before this phase, a status
+        // change only ever fired a push notification (silently a no-op
+        // locally, and easy to miss even in production if the device isn't
+        // subscribed) — nothing landed on the in-app Notifications page or
+        // counted toward the unread badge, unlike "order placed" which does
+        // both. Every status transition now writes an in-app row too.
         if ($order->user && $previousStatus !== $order->status) {
-            $webPush->sendToUser($order->user, [
-                'title' => 'Order update',
-                'body' => sprintf(
-                    'Your order%s is now %s.',
-                    $order->service ? " for {$order->service->name}" : '',
-                    $order->status,
-                ),
-                'url' => '/orders/' . $order->id,
-            ]);
+            $notifications->notify(
+                $order->user,
+                'order',
+                'Order update',
+                $this->statusMessage($order),
+                '/orders/' . $order->id,
+            );
         }
 
         return response()->json([
@@ -100,5 +104,18 @@ class AdminOrderController extends Controller
             'message' => 'Order updated successfully.',
             'data' => $order,
         ]);
+    }
+
+    private function statusMessage(Order $order): string
+    {
+        $ref = $order->reference;
+
+        return match ($order->status) {
+            'processing' => "Your order {$ref} is now being processed.",
+            'completed' => "Your order {$ref} has been completed. Check your order for delivery details.",
+            'failed' => "Your order {$ref} could not be completed and has failed. Please contact support if you were charged.",
+            'cancelled' => "Your order {$ref} has been cancelled.",
+            default => "Your order {$ref} status was updated to {$order->status}.",
+        };
     }
 }

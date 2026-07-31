@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Models\Wallet;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -33,7 +35,7 @@ class PaymentController extends Controller
         return response()->json($response->json(), $response->status());
     }
 
-    public function verify(Request $request, $reference)
+    public function verify(Request $request, $reference, NotificationService $notifications)
     {
         $response = Http::withToken(config('paystack.secret_key'))
             ->get(config('paystack.payment_url') . "/transaction/verify/{$reference}");
@@ -70,7 +72,7 @@ class PaymentController extends Controller
             ]);
         }
 
-        $this->creditWallet((int) $metadataUserId, $reference, (float) $payment['amount'] / 100);
+        $this->creditWallet((int) $metadataUserId, $reference, (float) $payment['amount'] / 100, $notifications);
 
         return response()->json([
             'success' => true,
@@ -86,7 +88,7 @@ class PaymentController extends Controller
         ]);
     }
 
-    public function webhook(Request $request)
+    public function webhook(Request $request, NotificationService $notifications)
     {
         $signature = $request->header('x-paystack-signature');
         $computed = hash_hmac('sha512', $request->getContent(), config('paystack.secret_key'));
@@ -120,7 +122,7 @@ class PaymentController extends Controller
         }
 
         $userId = (int) data_get($payment, 'metadata.user_id');
-        $this->creditWallet($userId, $reference, (float) $payment['amount'] / 100);
+        $this->creditWallet($userId, $reference, (float) $payment['amount'] / 100, $notifications);
 
         return response()->json(['message' => 'Wallet funded.']);
     }
@@ -134,7 +136,7 @@ class PaymentController extends Controller
      * written on every deposit, matching the pattern already used by
      * CheckoutController and AdminWalletController.
      */
-    private function creditWallet(int $userId, string $reference, float $amount): void
+    private function creditWallet(int $userId, string $reference, float $amount, NotificationService $notifications): void
     {
         DB::transaction(function () use ($userId, $reference, $amount) {
             $wallet = Wallet::query()->where('user_id', $userId)->lockForUpdate()->first();
@@ -164,5 +166,20 @@ class PaymentController extends Controller
                 'status' => 'success',
             ]);
         });
+
+        // Phase 6 (more notification triggers): a Paystack deposit previously
+        // updated the balance and both ledgers but never told the user it
+        // happened - notified only implicitly by them noticing a new balance
+        // next time they opened the Wallet page. Fired after the transaction
+        // commits so a notify failure can never roll back a successful credit.
+        if ($user = User::find($userId)) {
+            $notifications->notify(
+                $user,
+                'wallet',
+                'Wallet funded',
+                'Your wallet was funded with ' . number_format($amount, 2) . ' NGN via Paystack.',
+                '/wallet',
+            );
+        }
     }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BellIcon, CheckIcon } from "lucide-react";
+import { AlertTriangleIcon, BellIcon, CheckIcon, PackageIcon, WalletIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +9,26 @@ import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/State
 import { useMarkNotificationReadMutation, useNotificationsQuery } from "@/hooks/queries/useNotificationsQueries";
 import { extractErrorMessage } from "@/lib/api";
 import { formatDate } from "@/lib/format";
+
+/**
+ * Phase 6 (more notification triggers): the backend now writes several
+ * distinct `type` values (order/wallet/stock, previously only "order"
+ * existed), so give each a distinct icon rather than the same bell for
+ * every row. Falls back to the generic bell for any unrecognized/missing
+ * type, since `type` has no DB-level enum and new values may appear later.
+ */
+function notificationIcon(type?: string) {
+  switch (type) {
+    case "wallet":
+      return WalletIcon;
+    case "stock":
+      return AlertTriangleIcon;
+    case "order":
+      return PackageIcon;
+    default:
+      return BellIcon;
+  }
+}
 
 export default function NotificationsPage() {
   const notifications = useNotificationsQuery();
@@ -37,12 +57,14 @@ export default function NotificationsPage() {
       <h1 className="font-heading text-3xl font-bold">Notifications</h1>
       {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       <div className="space-y-3">
-        {items.map((item) => (
+        {items.map((item) => {
+          const Icon = notificationIcon(item.type);
+          return (
           <Card key={item.id}>
             <CardContent className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
                 <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <BellIcon className="size-4" aria-hidden="true" />
+                  <Icon className="size-4" aria-hidden="true" />
                 </div>
                 <div>
                   <h2 className="font-semibold">{item.title || `Notification #${item.id}`}</h2>
@@ -66,7 +88,8 @@ export default function NotificationsPage() {
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

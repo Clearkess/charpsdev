@@ -8,6 +8,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Service extends Model
 {
+    /**
+     * Phase 6 (more notification triggers): stock level (inclusive) at or
+     * below which admins get a one-time "low stock" alert as it's crossed
+     * during checkout. A plain class constant rather than a Setting row —
+     * unlike `support_email`/deposit bounds (Phase 4), this isn't something
+     * an admin needs to tune per-store without a deploy, so a constant keeps
+     * the feature simple; revisit as a Setting if that assumption changes.
+     */
+    public const LOW_STOCK_THRESHOLD = 5;
+
     protected $fillable = [
         'name',
         'slug',
