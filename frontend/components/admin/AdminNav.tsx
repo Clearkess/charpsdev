@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3Icon,
   LayoutDashboardIcon,
   PackageIcon,
   ServerIcon,
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 const adminNavItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboardIcon },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart3Icon },
   { href: "/admin/categories", label: "Categories", icon: TagIcon },
   { href: "/admin/services", label: "Services", icon: PackageIcon },
   { href: "/admin/providers", label: "Providers", icon: ServerIcon },

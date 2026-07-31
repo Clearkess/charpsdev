@@ -22,5 +22,6 @@ export const queryKeys = {
   adminProviders: ["admin", "providers"] as const,
   adminCoupons: ["admin", "coupons"] as const,
   adminSettings: ["admin", "settings"] as const,
+  adminAnalytics: (days: number) => ["admin", "analytics", days] as const,
   pushPublicKey: ["push", "public-key"] as const,
 };

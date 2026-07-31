@@ -221,6 +221,49 @@ export interface ChartDataPoint {
   revenue: number;
 }
 
+/** Phase 8 (analytics): one day's new-signup count, used by the Analytics page's signups chart. */
+export interface SignupDataPoint {
+  date: string;
+  count: number;
+}
+
+export interface OrderStatusCount {
+  status: string;
+  count: number;
+}
+
+export interface TopServiceStat {
+  service_id: number | null;
+  name: string;
+  orders: number;
+  revenue: number;
+}
+
+export interface CategoryRevenueStat {
+  category: string;
+  revenue: number;
+}
+
+/** Response shape of GET /admin/analytics/overview?days=7|30|90|365. */
+export interface AnalyticsOverview {
+  range_days: number;
+  summary: {
+    orders_in_range: number;
+    completed_orders_in_range: number;
+    revenue_in_range: number;
+    average_order_value: number;
+    new_users_in_range: number;
+  };
+  status_breakdown: OrderStatusCount[];
+  top_services: TopServiceStat[];
+  revenue_by_category: CategoryRevenueStat[];
+  signups_series: SignupDataPoint[];
+  coupon_usage: {
+    redemptions: number;
+    total_discount: number;
+  };
+}
+
 /**
  * Phase 4 (Providers/Coupons/Settings). `api_key` is never sent to the
  * browser — only a masked hint and a boolean flag so the admin UI can show

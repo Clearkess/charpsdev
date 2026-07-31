@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { useAuthStore } from "@/store/authStore";
 import type {
+  AnalyticsOverview,
   Category,
   ChartDataPoint,
   Coupon,
@@ -51,6 +52,30 @@ export function useAdminDashboardChartQuery() {
       return response.data.data;
     },
     enabled: isAdmin,
+  });
+}
+
+/**
+ * Phase 8 (analytics): powers the dedicated /admin/analytics page, separate
+ * from the pre-existing (already-in-production) useAdminDashboardQuery /
+ * useAdminDashboardChartQuery above. `days` defaults to 30 and must be one
+ * of 7/30/90/365 (enforced server-side too); `keepPreviousData` avoids a
+ * loading flash when the admin switches the range selector.
+ */
+export function useAdminAnalyticsQuery(days: 7 | 30 | 90 | 365 = 30) {
+  const isAdmin = useIsAdmin();
+
+  return useQuery({
+    queryKey: queryKeys.adminAnalytics(days),
+    queryFn: async () => {
+      const response = await api.get<{ success: boolean; data: AnalyticsOverview }>(
+        "/admin/analytics/overview",
+        { params: { days } },
+      );
+      return response.data.data;
+    },
+    enabled: isAdmin,
+    placeholderData: keepPreviousData,
   });
 }
 

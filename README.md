@@ -476,3 +476,49 @@ Before this phase, `App\Models\Notification` (the in-app row behind the Notifica
 ### Deployment status
 
 Not yet deployed to production (Railway backend / Vercel frontend) — built and verified locally only, per the same discipline followed for every prior phase. Awaiting explicit instruction to deploy. Unlike Phase 5, this phase has **no production caveat**: in-app notifications and push (already a safe no-op without VAPID keys configured, exactly as before this phase) both work identically in local dev and production with no environment-specific behavior.
+
+## 15) Phase 7 — Provider API Sync (Skipped)
+
+Seventh phase of the 10-phase roadmap ("provider API sync") was **skipped**, the same way Phase 3 (additional payment gateways) was skipped, and for the same reason: it requires real third-party credentials/API contracts that don't exist anywhere in this codebase.
+
+Investigation (`grep` across the whole backend for `reloadly|vtpass|nellobytes|smepay|gladtidings`, case-insensitive) confirmed the `providers` table is seeded (`DemoDataSeeder::seedProviders()`) with two rows — VTpass (`base_url: https://sandbox.vtpass.com/api`, `api_key: demo-vtpass-api-key`) and Reloadly (`base_url: https://giftcards-sandbox.reloadly.com`, `api_key: demo-reloadly-api-key`) — both **fake placeholder values**, not real, working sandbox or production credentials. `ProviderController` already supports full CRUD on providers (with `maskKey()` hiding all but the last 4 characters of `api_key` in every response) and has a comment foreshadowing a future stock/delivery sync, but no actual HTTP integration against any real provider API exists anywhere in the app.
+
+Three options were presented: (1) build a real integration against a specific provider if real credentials are supplied, (2) build a generic sync architecture wired against a clearly-labeled mock/fake adapter, or (3) skip the phase and move on, exactly as Phase 3 was skipped. Option 3 was chosen — proceed straight to Phase 8 (analytics). This phase can be revisited at any time once real provider credentials are available.
+
+## 16) Phase 8 — Analytics
+
+Eighth phase of the 10-phase roadmap. Built additively on top of Phases 1–6 (checkout, wallet, coupons, settings, delivery emails, notifications all untouched), tested locally against SQLite first, and **not yet deployed to production** as of this writing. No new migrations were needed — every field surfaced is derived from existing `orders`, `order_items`, `services`, `users`, and `coupons` data.
+
+### What was built
+
+The existing `/admin/dashboard` page (`AdminController::dashboard()` / `chartData()`) predates this 10-phase roadmap, is already live in production, and was **deliberately left unmodified** so it can never regress. Instead, a brand new, separate deep-dive page was added:
+
+- `App\Http\Controllers\Api\Admin\AdminAnalyticsController::overview()` — a new `GET /api/admin/analytics/overview` endpoint (inside the existing `admin` middleware group, so it's admin-only exactly like every other admin route) accepting an optional `days` query param restricted to `7 | 30 | 90 | 365` (`Rule::in()`, invalid values → 422; defaults to 30). Returns:
+  - **Summary**: orders in range, completed orders in range, revenue in range (post-discount, same definition as the existing dashboard's `revenue`), average order value, new users in range.
+  - **Status breakdown**: count of orders in range for every one of the 5 possible statuses (`pending`/`processing`/`completed`/`failed`/`cancelled`), including statuses with a zero count.
+  - **Top services**: the 10 highest-revenue services in range, by order count and revenue.
+  - **Revenue by category**: total revenue in range grouped by service category, sorted descending.
+  - **Signups series**: one entry per day in the selected range (zero-filled, so the frontend never has to handle gaps — the same pattern already used by the existing `chartData()` endpoint), with the count of new users that day.
+  - **Coupon usage**: count of completed orders in range that used a coupon, and the total discount given.
+  - Both "top services" and "revenue by category" correctly handle the two order shapes in this codebase: cart-checkout orders (which have `order_items` rows via the `items` relation) are summed at the line-item level (`price × quantity`); a true legacy single-service order (created via `POST /api/orders`, which never creates `order_items` rows) falls back to `order.service_id`/`order.amount`. Checking `items` first and only falling back when it's empty avoids double-counting, since cart-checkout orders also set `service_id` to their first item for backward compatibility.
+  - **Revenue methodology note**: "top services"/"revenue by category" use pre-discount, item-level `price × quantity`, not proportionally reduced by any coupon discount. This is intentional — the gap between the sum of these figures and the post-discount `revenue_in_range` always exactly equals `coupon_usage.total_discount` (verified numerically against local test data: item-level sums of ₦56,500 minus post-discount `revenue_in_range` of ₦56,000 equalled the ₦500 discount given in that period). These breakdowns are for relative ranking only, not financial reconciliation.
+
+### Frontend
+
+- New types added to `types/api.ts`: `SignupDataPoint`, `OrderStatusCount`, `TopServiceStat`, `CategoryRevenueStat`, `AnalyticsOverview`.
+- `useAdminAnalyticsQuery(days)` hook (`hooks/queries/useAdminQueries.ts`), using `keepPreviousData` so switching the date-range selector never shows a loading flash.
+- Two new chart components matching the existing dashboard's visual style (same CSS-variable-driven colors as `OrdersOverTimeChart`/`RevenueChart`): `SignupsChart` (area chart, day-bucketed signups) and `CategoryRevenueChart` (horizontal bar chart, revenue by category).
+- New page `/admin/analytics`: a 7/30/90/365-day range selector, 5 summary stat cards, an order status breakdown row, the two new charts side by side, and a top-services table — following the same `Card`/`StateBlock` patterns as every other admin page.
+- Added an "Analytics" entry to `AdminNav.tsx` (right after "Dashboard"), so the new page is actually reachable from the admin UI instead of only by typing the URL directly — the same nav-gap fix applied for Providers/Coupons/Settings in Phase 4.
+
+### Verification performed (local SQLite + local dev server only)
+
+- `php -l` clean on all new/changed backend files.
+- Manual curl testing against `php artisan serve` (admin token): default (30-day) overview, `days=7` (7-entry signups series), `days=365` (365-entry series), `days=15` (invalid — correctly 422), and a non-admin token (correctly 403, unchanged existing `admin` middleware).
+- Numerically verified the revenue methodology note above using real seeded/mutated local data.
+- `php artisan test` — 2/2 passing, no regressions.
+- `npm run build` (Next.js 16 + Turbopack) — compiles cleanly with **zero TypeScript errors**, 29 routes (up from 28 — `/admin/analytics` is the new route).
+
+### Deployment status
+
+Not yet deployed to production (Railway backend / Vercel frontend) — built and verified locally only, per the same discipline followed for every prior phase. Awaiting explicit instruction to deploy.
