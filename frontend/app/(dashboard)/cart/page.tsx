@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MinusIcon, PlusIcon, ShoppingCartIcon, Trash2Icon } from "lucide-react";
+import { CheckCircle2Icon, MinusIcon, PlusIcon, ShoppingCartIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/StateBlock";
 import {
   useCartQuery,
@@ -13,9 +14,11 @@ import {
   useClearCartMutation,
   useRemoveCartItemMutation,
   useUpdateCartItemMutation,
+  useValidateCouponMutation,
 } from "@/hooks/queries/useCartQueries";
 import { extractErrorMessage } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
+import type { CouponPreview } from "@/types/api";
 
 export default function CartPage() {
   const cart = useCartQuery();
@@ -23,8 +26,12 @@ export default function CartPage() {
   const removeItem = useRemoveCartItemMutation();
   const clearCart = useClearCartMutation();
   const checkout = useCheckoutMutation();
+  const validateCoupon = useValidateCouponMutation();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponPreview | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   if (cart.isPending) return <TableSkeleton rows={3} cols={4} />;
   if (cart.error) return <ErrorBlock message={extractErrorMessage(cart.error, "Failed to load cart.")} />;
@@ -51,15 +58,42 @@ export default function CartPage() {
     }
   };
 
+  const onApplyCoupon = async () => {
+    if (!couponInput.trim()) return;
+    setCouponError(null);
+    try {
+      const preview = await validateCoupon.mutateAsync({ code: couponInput.trim(), subtotal: total });
+      setAppliedCoupon(preview);
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(extractErrorMessage(err, "Invalid or expired coupon code."));
+    }
+  };
+
+  const onRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponError(null);
+    setCouponInput("");
+  };
+
   const onCheckout = async () => {
     setError(null);
     try {
-      const response = await checkout.mutateAsync();
+      const response = await checkout.mutateAsync(
+        appliedCoupon ? { coupon_code: appliedCoupon.code } : undefined,
+      );
       router.push(`/orders?placed=${response.data.id}`);
     } catch (err) {
+      // The coupon may have been exhausted/expired between the preview and
+      // this request (CheckoutController re-validates it authoritatively
+      // inside its own transaction) — surface that distinctly so the user
+      // knows to remove/retry the coupon rather than assume a generic failure.
       setError(extractErrorMessage(err, "Checkout failed. Please try again."));
     }
   };
+
+  const discount = appliedCoupon?.discount ?? 0;
+  const totalAfterDiscount = appliedCoupon?.total_after_discount ?? total;
 
   return (
     <section className="space-y-6">
@@ -133,9 +167,59 @@ export default function CartPage() {
             <CardHeader>
               <CardTitle>Order summary</CardTitle>
             </CardHeader>
-            <CardContent className="flex items-center justify-between text-lg font-semibold">
-              <span>Total</span>
-              <span>{formatCurrency(total)}</span>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-xs text-muted-foreground" htmlFor="coupon-code">
+                  Coupon code
+                </label>
+                {appliedCoupon ? (
+                  <div className="mt-1 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
+                    <span className="flex items-center gap-2 font-medium text-primary">
+                      <CheckCircle2Icon className="size-4" aria-hidden="true" />
+                      {appliedCoupon.code} applied
+                    </span>
+                    <Button variant="ghost" size="icon-sm" aria-label="Remove coupon" onClick={onRemoveCoupon}>
+                      <XIcon className="size-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-1 flex gap-2">
+                    <Input
+                      id="coupon-code"
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value)}
+                      placeholder="e.g. SAVE500"
+                      className="uppercase"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={validateCoupon.isPending || !couponInput.trim()}
+                      onClick={() => void onApplyCoupon()}
+                    >
+                      {validateCoupon.isPending ? "Checking..." : "Apply"}
+                    </Button>
+                  </div>
+                )}
+                {couponError ? <p className="mt-1.5 text-xs text-destructive">{couponError}</p> : null}
+              </div>
+
+              <div className="space-y-1.5 border-t border-border pt-3 text-sm">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(total)}</span>
+                </div>
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between text-primary">
+                    <span>Discount ({appliedCoupon.code})</span>
+                    <span>-{formatCurrency(discount)}</span>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between pt-1 text-lg font-semibold">
+                  <span>Total</span>
+                  <span>{formatCurrency(totalAfterDiscount)}</span>
+                </div>
+              </div>
             </CardContent>
             <CardFooter className="flex justify-between gap-3">
               <Button

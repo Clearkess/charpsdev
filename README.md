@@ -354,3 +354,45 @@ The originally-available `VERCEL_TOKEN` (a personal-account token) authenticated
 
 Post-deploy checks from §3 (login, dashboard, wallet, orders, admin) have been re-run against `https://charpsdev.vercel.app` and pass.
 
+## 12) Phase 4 — Providers / Coupons / Settings Admin Pages
+
+Third and fourth roadmap phases were addressed together at the user's explicit direction: Phase 3 ("additional payment gateways") was **explicitly skipped** — the user confirmed satisfaction with Paystack-only and asked to move straight to Phase 4. Built additively on top of Phases 1–2 (Paystack `PaymentController`, wallet, checkout, admin panel all untouched), tested locally against SQLite first (same discipline as every prior phase), and **not yet deployed to production** as of this writing.
+
+Rather than ship the three new admin areas as decorative CRUD shells, each was wired into a real, pre-existing flow:
+
+- **Providers** — admin CRUD over the pre-existing `providers` table. The sensitive `api_key` column is **never** returned to the browser in full: `ProviderController` exposes only a masked `api_key_masked` hint (`••••<last4>`) plus a `has_api_key` boolean, and `update()` treats a blank/omitted `api_key` as "leave the stored secret unchanged." Deleting a provider with services still assigned to it is blocked (422). Also fixed a genuinely missing model relation while building this: `Provider` had no inverse `services()` relation even though `Service::provider()` already existed.
+- **Coupons** — a brand-new discount-code system that actually integrates into checkout rather than sitting decoratively in an admin table. `Coupon::isValidFor()`/`discountFor()` encode the business rules (active, not expired, under `max_uses`, subtotal meets `min_order_amount`; percentage or fixed discount, capped so a coupon can never make a total negative). `CheckoutController::store()` locks the coupon row (`lockForUpdate()`) inside its existing DB transaction, validates it against the real subtotal, applies the discount to the order total, and atomically increments `used_count` — preventing two concurrent checkouts from over-redeeming a limited-use coupon. A separate public, non-authoritative `POST /api/coupons/validate` endpoint lets the Cart page preview a discount without locking the row or touching `used_count`.
+- **Settings** — a brand-new key-value settings store that actually drives behavior instead of sitting inert: `DepositRequest`'s previously-hardcoded min/max deposit bounds now read from `Setting::get('min_deposit_amount' | 'max_deposit_amount')`. Settings are seeded idempotently (`SettingsSeeder`, `firstOrCreate`) so re-seeding production later never clobbers an admin's changes. The admin `SettingController::update()` deliberately restricts updates to pre-existing seeded keys (`Rule::exists('settings','key')`) — an admin can change values but not invent new keys the rest of the codebase doesn't know how to read.
+
+### Bug found and fixed — `Setting::get()` unserialize failure
+
+The original implementation cached the settings lookup via `Cache::rememberForever('settings:all', fn () => static::query()->get()->keyBy('key'))` — caching a raw Eloquent `Collection` of `Setting` models through Laravel's `database` cache driver, which serializes cache values with PHP's `serialize()`/`unserialize()`. This threw `"The script tried to call a method on an incomplete object... unserialize() gets called"` on the **second** `Setting::get()` call within the same PHP process — exactly what `DepositRequest::rules()` does (it calls `Setting::get()` twice, once for min and once for max). The first call in a process succeeds (cache miss, computed and returned directly); the second call hits the cache and fails to unserialize the model collection. Fixed by caching a plain PHP array (`["key" => ["value" => ..., "type" => ...]]`, built via `->mapWithKeys(...)->all()`) instead of the raw Collection — plain arrays/scalars have no such edge case. Verified via `php artisan tinker` (reproduced the exact error, then confirmed the fix after also running `php artisan cache:clear` to purge the stale bad entry left by the reproduction). Cache invalidation on write is handled via `Setting::booted()` registering `static::saved`/`static::deleted` hooks that call `Cache::forget('settings:all')`.
+
+### New/changed API endpoints
+
+- `GET/POST /api/admin/providers`, `PUT/DELETE /api/admin/providers/{provider}`
+- `GET/POST /api/admin/coupons`, `PUT/DELETE /api/admin/coupons/{coupon}`
+- `GET /api/admin/settings`, `PUT /api/admin/settings` (bulk upsert, existing keys only)
+- `POST /api/coupons/validate` (public, authenticated — preview a coupon without redeeming it)
+- `POST /api/checkout` — now accepts an optional `coupon_code`; response's `data.order` includes `coupon_code`/`discount` when applied
+
+### Frontend
+
+- New types (`Provider`, `Coupon`, `CouponType`, `CouponPreview`, `Setting`, `SettingType`) in `types/api.ts`; `Order` extended with `coupon_code`/`discount`.
+- New TanStack Query hooks in `useAdminQueries.ts` (providers/coupons/settings query + mutations) and `useValidateCouponMutation`/updated `useCheckoutMutation` in `useCartQueries.ts`, following the codebase's existing `useQuery`/`useMutation` + `invalidateQueries` conventions throughout.
+- Cart page: coupon code input with an "Apply"/"Remove" flow (previewed via `/coupons/validate`, actually redeemed only at checkout), subtotal/discount/total breakdown.
+- Orders page: purchase rows that used a coupon show the code and discount amount inline.
+- **New admin pages**: `/admin/providers` (masked-key CRUD, inline edit with "blank = keep existing key"), `/admin/coupons` (create form + status/usage table), `/admin/settings` (grouped, editable key-value form driven by each setting's `type`).
+- **Admin navigation gap fixed**: before this phase, the only in-app link to *any* `/admin/*` page was the sidebar's single "Admin → Dashboard" entry — `/admin/categories`, `/admin/services`, etc. were only reachable by typing the URL directly (confirmed via exhaustive `grep` across `app/`/`components/`). Added a shared `AdminNav` pill sub-navigation (`components/admin/AdminNav.tsx`), rendered from `app/admin/layout.tsx` above every admin page's content, linking all nine admin sections.
+
+### Verification performed (local SQLite + local dev server only)
+
+- `php -l` clean across all new/changed backend files; `php artisan migrate --force` applied the 3 new migrations cleanly; `php artisan db:seed --class=SettingsSeeder --force` seeded idempotently.
+- Extensive `curl` end-to-end testing against a local `php artisan serve` + admin login: provider create/masked-key display/update-without-key-preserves-secret/delete-blocked-when-in-use/delete-succeeds-when-free; coupon create (auto-generated code, explicit lowercase code normalized to uppercase), percentage >100 rejected; settings bulk update (unknown key correctly rejected 422) with live cache-invalidation proven by a real deposit request immediately honoring a newly-lowered `min_deposit_amount`; coupon preview endpoint accepted/rejected correctly against `min_order_amount`; full checkout with a valid coupon (order total correctly discounted, wallet debited the discounted amount, `used_count` incremented); checkout with an invalid coupon rolled back the **entire** transaction atomically (cart/wallet unchanged); checkout with no coupon at all showed zero regression (`coupon_code`/`discount` both `null`).
+- `php artisan test` — 2/2 passing, no regressions.
+- `npm run build` (Next.js 16 + Turbopack) — compiles cleanly with **zero TypeScript errors** across all 28 routes, including the three new admin pages.
+- Re-verified against the local dev server after the frontend pages were built: `GET /api/admin/providers|coupons|settings` return exactly the shapes the new pages consume; `PUT /api/admin/settings` accepts the "save all settings" payload shape the Settings page sends; provider update omitting `api_key` and coupon create omitting `code` both behave as the pages expect.
+
+### Deployment status
+
+Not yet deployed to production (Railway backend / Vercel frontend) — built and verified locally only, per the same discipline followed for Phase 2. Awaiting explicit instruction to deploy.

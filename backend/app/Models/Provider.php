@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Provider extends Model
 {
@@ -17,4 +18,9 @@ class Provider extends Model
     protected $casts = [
         'active' => 'boolean',
     ];
+
+    public function services(): HasMany
+    {
+        return $this->hasMany(Service::class);
+    }
 }

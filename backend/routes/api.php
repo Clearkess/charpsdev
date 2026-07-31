@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PushSubscriptionController;
+use App\Http\Controllers\Api\CouponController;
 
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
@@ -26,6 +27,9 @@ use App\Http\Controllers\Api\Admin\AdminOrderController;
 use App\Http\Controllers\Api\Admin\AdminWalletController;
 use App\Http\Controllers\Api\Admin\ServiceController as AdminServiceController;
 use App\Http\Controllers\Api\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Api\Admin\ProviderController as AdminProviderController;
+use App\Http\Controllers\Api\Admin\CouponController as AdminCouponController;
+use App\Http\Controllers\Api\Admin\SettingController as AdminSettingController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -113,6 +117,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/cart/{cartItem}', [CartController::class, 'destroy']);
     Route::delete('/cart', [CartController::class, 'clear']);
     Route::post('/checkout', [CheckoutController::class, 'store']);
+    Route::post('/coupons/validate', [CouponController::class, 'validateCode']);
 
     Route::get('/wallet', [WalletController::class, 'index']);
     Route::post('/wallet/deposit', [WalletController::class, 'deposit']);
@@ -152,5 +157,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/wallets/{user}/transactions', [AdminWalletController::class, 'transactions']);
         Route::post('/wallets/{user}/credit', [AdminWalletController::class, 'credit']);
         Route::post('/wallets/{user}/debit', [AdminWalletController::class, 'debit']);
+
+        Route::get('/providers', [AdminProviderController::class, 'index']);
+        Route::post('/providers', [AdminProviderController::class, 'store']);
+        Route::put('/providers/{provider}', [AdminProviderController::class, 'update']);
+        Route::delete('/providers/{provider}', [AdminProviderController::class, 'destroy']);
+
+        Route::get('/coupons', [AdminCouponController::class, 'index']);
+        Route::post('/coupons', [AdminCouponController::class, 'store']);
+        Route::put('/coupons/{coupon}', [AdminCouponController::class, 'update']);
+        Route::delete('/coupons/{coupon}', [AdminCouponController::class, 'destroy']);
+
+        Route::get('/settings', [AdminSettingController::class, 'index']);
+        Route::put('/settings', [AdminSettingController::class, 'update']);
     });
 });

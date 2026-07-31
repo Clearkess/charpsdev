@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CartItem;
+use App\Models\Coupon;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -52,8 +53,10 @@ class CheckoutController extends Controller
             }
         }
 
+        $couponCode = $request->filled('coupon_code') ? Str::upper(trim($request->input('coupon_code'))) : null;
+
         try {
-            $order = DB::transaction(function () use ($cartItems, $userId, $request) {
+            $order = DB::transaction(function () use ($cartItems, $userId, $request, $couponCode) {
                 // Lock every affected service row to prevent concurrent
                 // checkouts from overselling limited stock.
                 $lockedServices = \App\Models\Service::query()
@@ -62,7 +65,7 @@ class CheckoutController extends Controller
                     ->get()
                     ->keyBy('id');
 
-                $total = 0.0;
+                $subtotal = 0.0;
                 foreach ($cartItems as $item) {
                     $service = $lockedServices[$item->service_id];
 
@@ -72,9 +75,28 @@ class CheckoutController extends Controller
                         ]);
                     }
 
-                    $total += (float) $service->price * $item->quantity;
+                    $subtotal += (float) $service->price * $item->quantity;
                 }
-                $total = round($total, 2);
+                $subtotal = round($subtotal, 2);
+
+                // Coupon is locked for the duration of this transaction so
+                // two concurrent checkouts sharing the last remaining use
+                // of a `max_uses`-limited coupon can't both succeed.
+                $coupon = null;
+                $discount = 0.0;
+                if ($couponCode) {
+                    $coupon = Coupon::where('code', $couponCode)->lockForUpdate()->first();
+
+                    if (! $coupon || ! $coupon->isValidFor($subtotal)) {
+                        throw ValidationException::withMessages([
+                            'coupon_code' => 'This coupon code is invalid, expired, or no longer applicable to your order.',
+                        ]);
+                    }
+
+                    $discount = $coupon->discountFor($subtotal);
+                }
+
+                $total = round($subtotal - $discount, 2);
 
                 $wallet = Wallet::where('user_id', $userId)->lockForUpdate()->first();
                 $wallet ??= Wallet::create(['user_id' => $userId, 'balance' => 0, 'currency' => 'NGN']);
@@ -97,6 +119,8 @@ class CheckoutController extends Controller
                     'quantity' => $firstItem->quantity,
                     'amount' => $total,
                     'total' => $total,
+                    'coupon_code' => $coupon?->code,
+                    'discount' => $coupon ? $discount : null,
                     'status' => 'pending',
                     'payment_method' => 'wallet',
                     'details' => [
@@ -105,8 +129,13 @@ class CheckoutController extends Controller
                             'unit_price' => (float) $lockedServices[$item->service_id]->price,
                             'quantity' => $item->quantity,
                         ])->all(),
+                        'subtotal' => $subtotal,
                     ],
                 ]);
+
+                if ($coupon) {
+                    $coupon->increment('used_count');
+                }
 
                 foreach ($cartItems as $item) {
                     $service = $lockedServices[$item->service_id];

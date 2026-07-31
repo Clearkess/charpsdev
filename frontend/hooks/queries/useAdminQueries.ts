@@ -7,11 +7,15 @@ import { useAuthStore } from "@/store/authStore";
 import type {
   Category,
   ChartDataPoint,
+  Coupon,
+  CouponType,
   DashboardStats,
   Order,
   OrderStatus,
   PaginatedResponse,
+  Provider,
   Service,
+  Setting,
   SimpleMessageResponse,
   Transaction,
   User,
@@ -329,5 +333,178 @@ export function useAdminWalletTransactionsQuery(userId: number | null, page: num
     },
     enabled: isAdmin && userId !== null,
     placeholderData: keepPreviousData,
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase 4 — Providers / Coupons / Settings admin pages                */
+/* ------------------------------------------------------------------ */
+
+export function useAdminProvidersQuery() {
+  const isAdmin = useIsAdmin();
+
+  return useQuery({
+    queryKey: queryKeys.adminProviders,
+    queryFn: async () => {
+      const response = await api.get<{ success: boolean; data: Provider[] }>("/admin/providers");
+      return response.data.data;
+    },
+    enabled: isAdmin,
+  });
+}
+
+export interface AdminProviderPayload {
+  name: string;
+  base_url: string;
+  api_key?: string;
+  active?: boolean;
+}
+
+export function useAdminProviderCreateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: AdminProviderPayload) => {
+      const response = await api.post<{ success: boolean; message: string; data: Provider }>(
+        "/admin/providers",
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminProviders });
+    },
+  });
+}
+
+export function useAdminProviderUpdateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ providerId, ...payload }: Partial<AdminProviderPayload> & { providerId: number }) => {
+      const response = await api.put<{ success: boolean; message: string; data: Provider }>(
+        `/admin/providers/${providerId}`,
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminProviders });
+    },
+  });
+}
+
+export function useAdminProviderDeleteMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (providerId: number) => {
+      const response = await api.delete<SimpleMessageResponse>(`/admin/providers/${providerId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminProviders });
+    },
+  });
+}
+
+export function useAdminCouponsQuery() {
+  const isAdmin = useIsAdmin();
+
+  return useQuery({
+    queryKey: queryKeys.adminCoupons,
+    queryFn: async () => {
+      const response = await api.get<{ success: boolean; data: Coupon[] }>("/admin/coupons");
+      return response.data.data;
+    },
+    enabled: isAdmin,
+  });
+}
+
+export interface AdminCouponPayload {
+  code?: string;
+  type: CouponType;
+  value: number;
+  min_order_amount?: number | null;
+  max_uses?: number | null;
+  expires_at?: string | null;
+  active?: boolean;
+}
+
+export function useAdminCouponCreateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: AdminCouponPayload) => {
+      const response = await api.post<{ success: boolean; message: string; data: Coupon }>(
+        "/admin/coupons",
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminCoupons });
+    },
+  });
+}
+
+export function useAdminCouponUpdateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ couponId, ...payload }: Partial<AdminCouponPayload> & { couponId: number }) => {
+      const response = await api.put<{ success: boolean; message: string; data: Coupon }>(
+        `/admin/coupons/${couponId}`,
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminCoupons });
+    },
+  });
+}
+
+export function useAdminCouponDeleteMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (couponId: number) => {
+      const response = await api.delete<SimpleMessageResponse>(`/admin/coupons/${couponId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminCoupons });
+    },
+  });
+}
+
+export function useAdminSettingsQuery() {
+  const isAdmin = useIsAdmin();
+
+  return useQuery({
+    queryKey: queryKeys.adminSettings,
+    queryFn: async () => {
+      const response = await api.get<{ success: boolean; data: Setting[] }>("/admin/settings");
+      return response.data.data;
+    },
+    enabled: isAdmin,
+  });
+}
+
+export function useAdminSettingsUpdateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (settings: { key: string; value: string | number | boolean }[]) => {
+      const response = await api.put<{ success: boolean; message: string; data: Setting[] }>(
+        "/admin/settings",
+        { settings },
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminSettings });
+    },
   });
 }

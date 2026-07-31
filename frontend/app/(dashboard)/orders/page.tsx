@@ -159,7 +159,14 @@ export default function OrdersPage() {
                       <TableCell>{order.order_number || `#${order.id}`}</TableCell>
                       <TableCell className="max-w-xs truncate">{itemNames}</TableCell>
                       <TableCell>{totalQuantity}</TableCell>
-                      <TableCell>{formatCurrency(order.total ?? order.amount ?? order.price ?? 0)}</TableCell>
+                      <TableCell>
+                        {formatCurrency(order.total ?? order.amount ?? order.price ?? 0)}
+                        {order.coupon_code ? (
+                          <span className="mt-0.5 block text-xs text-primary">
+                            {order.coupon_code} · -{formatCurrency(order.discount ?? 0)}
+                          </span>
+                        ) : null}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={statusVariant(order.status)} className="capitalize">
                           {order.status}

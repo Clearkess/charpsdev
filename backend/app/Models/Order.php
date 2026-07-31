@@ -16,6 +16,8 @@ class Order extends Model
         'quantity',
         'amount',
         'total',
+        'coupon_code',
+        'discount',
         'payload',
         'provider_reference',
         'status',
@@ -28,6 +30,7 @@ class Order extends Model
         'details' => 'array',
         'amount' => 'decimal:2',
         'total' => 'decimal:2',
+        'discount' => 'decimal:2',
     ];
 
     public function user(): BelongsTo

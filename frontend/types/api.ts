@@ -122,6 +122,9 @@ export interface Order {
   reference?: string;
   order_number?: string;
   total?: number | string;
+  /** Phase 4: set only when a coupon was applied at checkout. */
+  coupon_code?: string | null;
+  discount?: number | string | null;
   payment_method?: string | null;
   payload?: Record<string, unknown> | null;
   provider_reference?: string | null;
@@ -213,4 +216,59 @@ export interface ChartDataPoint {
   date: string;
   orders: number;
   revenue: number;
+}
+
+/**
+ * Phase 4 (Providers/Coupons/Settings). `api_key` is never sent to the
+ * browser — only a masked hint and a boolean flag so the admin UI can show
+ * "a key is set" without ever exposing the plaintext credential.
+ */
+export interface Provider {
+  id: number;
+  name: string;
+  slug: string;
+  base_url: string;
+  api_key_masked?: string | null;
+  has_api_key: boolean;
+  active: boolean;
+  services_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type CouponType = "percentage" | "fixed";
+
+export interface Coupon {
+  id: number;
+  code: string;
+  type: CouponType;
+  value: number | string;
+  min_order_amount?: number | string | null;
+  max_uses?: number | null;
+  used_count: number;
+  expires_at?: string | null;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CouponPreview {
+  code: string;
+  type: CouponType;
+  value: number | string;
+  discount: number;
+  total_after_discount: number;
+}
+
+export type SettingType = "string" | "integer" | "float" | "boolean" | "json";
+
+export interface Setting {
+  id: number;
+  key: string;
+  value: string | null;
+  type: SettingType;
+  group: string;
+  label?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
