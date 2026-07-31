@@ -277,13 +277,13 @@ Two separate ledger tables existed for wallet activity: `transactions` (read by 
 
 Admin credit/debit with and without a reason; insufficient-balance debit correctly rejected with balance left untouched; reason field's 255-char max enforced; deposit `min:100`/`max:5000000` bounds enforced; Paystack deposit path exercised via a `php artisan tinker` reflection call (no live Paystack keys in local dev) and confirmed it now writes both `transactions` and `wallet_transactions`; Phase 1's full checkout flow re-verified end-to-end still working, now with the `description` field populated on the resulting transaction; the new `/api/admin/wallets/{user}/transactions` endpoint confirmed admin-only (a non-admin user gets 403). Frontend `npm run build` (Next.js 16 + Turbopack) compiles cleanly with zero TypeScript errors across all 25 routes.
 
-### Known gap in this pass
+### Known gap in this pass — closed, see §11
 
-The originally-approved Phase 2 scope also included linking a purchase-type transaction on the user Wallet page to its underlying order (so a user could click through from "Purchase: order ORD-..." to that order's detail). This was **not implemented** in this pass — only the plain `description` text was added, with no clickable link/navigation yet. Candidate for a follow-up pass.
+The originally-approved Phase 2 scope also included linking a purchase-type transaction on the user Wallet page to its underlying order. Not implemented in the original Phase 2 pass; implemented in §11 below.
 
 ### Deployment status
 
-Committed locally as `9527c2d` (backend) and `1e7ddeb` (frontend), pushed to `origin/main`. **Not yet deployed to Railway or production Vercel** — Phase 2 has been built and verified locally only, matching the "test locally first, deploy only on explicit instruction" pattern established in Phase 1. Railway/Vercel production currently still serve Phase 1 (commit `a4c0063`/`a7c5d62`).
+Committed locally as `9527c2d` (backend) and `1e7ddeb` (frontend), pushed to `origin/main`. **Now deployed to production Railway** (see §11 for the deploy that shipped this, plus the order-link feature, together). Vercel frontend deploy is currently blocked — see §11.
 
 Phases 3–10 of the roadmap remain intentionally not started.
 
@@ -321,5 +321,28 @@ Frontend-only UX redesign, requested independently of the phase roadmap above. N
 
 ### Deployment status
 
-Committed as `95b4a15`, pushed to `origin/main`. **Not deployed to production Vercel/Railway** — matches the "test locally first, deploy only on explicit instruction" pattern used throughout this project. Production currently still serves the last deployed Phase 1 build.
+Committed as `95b4a15`, pushed to `origin/main`. **Backend deployed to Railway production** (see §11). **Frontend (Vercel) deploy blocked** — see §11.
+
+## 11) Transaction→Order Link + Production Deploy (this pass)
+
+Closed the Phase 2 "known gap" (§9) and pushed both Phase 2 and the Services redesign (§10) to production.
+
+### Transaction→order link
+- **Backend**: `Transaction::order()` — `belongsTo(Order::class, 'reference', 'reference')`. Purchase-type transactions share the same generated `ORD-...` reference as the order `CheckoutController` creates in the same DB transaction; deposit/admin-credit/admin-debit transactions use distinct reference formats (UUID / `CRD-...` / `DBT-...`), so this naturally resolves to `null` for them — no migration/new column needed. `WalletController::transactions()` eager-loads a minimal `order:id,reference,order_number,status` and explicitly nulls it for any non-`purchase` transaction as a defensive guard.
+- **Frontend**: `Transaction.order` added to `types/api.ts`; the Wallet page shows a "View order →" link under a purchase transaction's description, linking to `/orders?ref=<reference>`; the Orders page reads that `ref` param and scrolls to + highlights the matching row.
+- Committed as `bdc1a6b`, pushed to `origin/main`.
+
+### Railway backend deploy — ✅ live in production
+- GitHub source link had gone stale again (recurring issue, see §7 notes) — reconnected via `serviceConnect`, then `serviceInstanceDeploy(latestCommit: true)` against commit `bdc1a6b`. Deployment reached `SUCCESS`.
+- **Verified live** at `https://charpsdev-production.up.railway.app`: `/up` returns 200; login works; `GET /api/wallet/transactions` for a real production user shows a genuine purchase transaction (`ORD-DCKX0GFOLD`) correctly resolving `order: {id: 13, ...}`, while older demo-seeded purchase transactions (different reference format) and deposit transactions correctly resolve `order: null`; confirmed order `13` exists via `GET /api/orders`; deposit-cap enforcement (`amount > 5000000`) correctly rejected with 422; admin drill-down endpoint (`/api/admin/wallets/{user}/transactions`) confirmed working with a real admin login. Production now runs commit `bdc1a6b` (Phase 2 + Services redesign + order-link, all in one deploy since they'd accumulated on `main`).
+
+### Vercel frontend deploy — ⚠️ blocked, not completed
+The `VERCEL_TOKEN` available in this sandbox authenticates for basic user identity (`GET /v2/user` succeeds) but every team/project-scoped call (`vercel deploy`, `vercel inspect`, `GET /v9/projects/...`, `GET /v6/deployments`) is rejected with `403 forbidden`, `"saml": true`, `"scope": "charps-dev"` — the `charps-dev` Vercel team requires a re-authenticated/SSO session that this token type cannot satisfy programmatically. This is a hard account/token-permission blocker, not a code issue. The live site at `https://charpsdev.vercel.app` is confirmed still serving an old build (response `age` header ~38h at time of check) — the frontend changes from this pass (Services redesign, bottom nav, transaction→order link) are **pushed to GitHub but not yet live**.
+
+**To unblock**, one of:
+1. Generate a new Vercel token from the `charps-dev` team's own dashboard (Settings → Tokens) rather than a personal-account token, and re-run this deploy with it, or
+2. Trigger the deploy manually from the Vercel dashboard (Deployments → Redeploy, or confirm/enable Git-integration auto-deploy on push to `main` — it does not appear to be firing on push currently either), or
+3. Provide SSO/session access so the CLI can complete an interactive login.
+
+Once frontend is live, re-run the §3 post-deploy checks (login, dashboard, wallet, orders, admin) against `https://charpsdev.vercel.app` to confirm the new UI is served correctly.
 
