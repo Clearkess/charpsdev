@@ -23,6 +23,8 @@ class Order extends Model
         'status',
         'payment_method',
         'details',
+        'delivery_content',
+        'delivered_at',
     ];
 
     protected $casts = [
@@ -31,6 +33,7 @@ class Order extends Model
         'amount' => 'decimal:2',
         'total' => 'decimal:2',
         'discount' => 'decimal:2',
+        'delivered_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

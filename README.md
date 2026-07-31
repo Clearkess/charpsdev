@@ -396,3 +396,43 @@ The original implementation cached the settings lookup via `Cache::rememberForev
 ### Deployment status
 
 Not yet deployed to production (Railway backend / Vercel frontend) — built and verified locally only, per the same discipline followed for Phase 2. Awaiting explicit instruction to deploy.
+
+## 13) Phase 5 — Product Delivery Emails
+
+Fifth phase of the 10-phase roadmap. Built additively on top of Phases 1–4 (checkout, wallet, coupons, settings all untouched), tested locally against SQLite first, and **not yet deployed to production** as of this writing.
+
+### What was built
+
+Previously, marking an order "completed" only fired a push notification (`WebPushService`) — there was no way to actually hand the customer the digital product they paid for (a license key, PIN, download link, account credentials, etc.), and no email was ever sent for order fulfillment at all.
+
+- `orders` gained two additive/nullable columns: `delivery_content` (text — whatever the admin needs to hand the customer) and `delivered_at` (timestamp — first time the order was marked completed).
+- `App\Notifications\OrderDeliveredNotification` (uses `Illuminate\Notifications\Notification` + `MailMessage`, the same pattern already used by the existing `ResetPasswordNotification` — no queue, sent synchronously; see note below on why). Renders: order reference, a line-item list (built from `order.items` when the cart-checkout path created `order_items` rows, falling back to `order.details['items']` / `order.details['service_name']` for the older single-service `POST /api/orders` path so both order shapes produce a correct summary), order total, the delivery content (each `\n`-separated line rendered as its own paragraph — `MailMessage::line()` collapses embedded newlines into one `<p>` otherwise, which would squash a multi-line credentials block into an unreadable single line), and a support-contact line sourced from the Phase 4 `support_email` setting.
+- `AdminOrderController::update()` now accepts an optional `delivery_content` (nullable, max 5000 chars) alongside the existing `status`/`provider_reference`/`details`. The email fires only when the order **just became** "completed" (status transition, not a no-op re-save) **or** when the admin supplies new/changed delivery content on an order that was already completed (e.g. they forgot to paste the code the first time) — a same-content re-save of an already-completed order is correctly a no-op and does not re-send. `delivered_at` is set once, on first completion, and never overwritten by later saves. The whole `notify()` call is wrapped in try/catch + `Log::error()` so a misconfigured mail transport can never block the actual order status update.
+
+### Why not queued
+
+This project has **no queue worker process** anywhere in its Railway deployment — `Procfile`/`railway.json` only run `php artisan serve`; there's no `php artisan queue:work` dyno. A `ShouldQueue` notification would silently never send in production (jobs would pile up in the `jobs` table forever). Sent synchronously instead, consistent with the existing `ResetPasswordNotification`.
+
+### Frontend
+
+- `Order` type extended with `delivery_content`/`delivered_at`.
+- **Admin Orders page** (`/admin/orders`): each row's new "Delivery" column shows a truncated preview of any existing delivery content plus an "Add delivery info" / "Edit" button that opens an inline textarea + "Save & notify" action. Saving always sets `status: "completed"` alongside the typed content — that's what triggers the backend email — and refreshes the row.
+- **User Orders page** (`/orders`): a "Delivery" column shows a "View"/"Hide" toggle (via a `PackageCheckIcon` button) for any order with delivery content, expanding a `<pre>` block with the delivered content and the delivery timestamp underneath the row.
+
+### Verification performed (local SQLite + local dev server only, `MAIL_MAILER=log`)
+
+- `php -l` clean on all new/changed files; `php artisan migrate --force` applied the new migration cleanly.
+- Logged in as both admin and a regular user against `php artisan serve` and inspected the real rendered email HTML written to `storage/logs/laravel.log` for every case:
+  - New completion with multi-line delivery content → email sent, subject/greeting/support-email footer all correct, each line of the delivery content rendered as its own paragraph (not squashed together).
+  - Re-saving the exact same `status: completed` + identical `delivery_content` → **no** email sent, `delivered_at` unchanged (idempotency).
+  - Changing `delivery_content` on an already-completed order → email **re-sent** with the corrected content.
+  - Changing status between two non-"completed" values (`processing` → `failed`) with no `delivery_content` → **no** delivery email sent (push notification still fires, unchanged from before this phase).
+  - Marking an order completed with **no** `delivery_content` at all → email still sent (order confirmation), correctly omitting the "Delivery details" section.
+  - A legacy single-service order (created via `POST /api/orders`, which never creates `order_items` rows) → the `details.service_name`/`order.quantity` fallback path produced the correct "MTN Airtime Recharge x2" line, proving both order shapes are handled.
+  - `GET /api/orders` (user-facing) confirmed to return the new `delivery_content`/`delivered_at` fields correctly.
+- `php artisan test` — 2/2 passing, no regressions.
+- `npm run build` (Next.js 16 + Turbopack) — compiles cleanly with **zero TypeScript errors** across all 28 routes.
+
+### Deployment status / production note
+
+Not yet deployed to production. **Important caveat for whenever this does deploy**: production's `MAIL_MAILER` is currently also set to `log` (see `.env.railway.example`), meaning emails are written to the server log, not actually delivered to customers' inboxes, until real SMTP/mailer credentials (e.g. `MAIL_MAILER=smtp` + a provider like Mailgun/Resend/SES, or `MAIL_MAILER=postmark`) are configured on Railway. The feature is fully built and will work correctly the moment real mail credentials are set — no code changes needed.

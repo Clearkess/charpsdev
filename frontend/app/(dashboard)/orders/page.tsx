@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ShoppingCartIcon } from "lucide-react";
+import { PackageCheckIcon, ShoppingCartIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +35,16 @@ export default function OrdersPage() {
   const [quantity, setQuantity] = useState("1");
   const [message, setMessage] = useState<string | null>(null);
   const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Set<number>>(new Set());
+
+  const toggleDelivery = (orderId: number) => {
+    setExpandedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (highlightRef && highlightedRowRef.current) {
@@ -138,6 +148,7 @@ export default function OrdersPage() {
                   <TableHead>Quantity</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Delivery</TableHead>
                   <TableHead>Created</TableHead>
                 </TableRow>
               </TableHeader>
@@ -150,30 +161,65 @@ export default function OrdersPage() {
                     ? order.items.reduce((sum, item) => sum + item.quantity, 0)
                     : (order.quantity ?? "—");
                   const isHighlighted = Boolean(highlightRef) && (order.reference === highlightRef || order.order_number === highlightRef);
+                  const hasDelivery = Boolean(order.delivery_content);
+                  const isExpanded = expandedOrderIds.has(order.id);
                   return (
-                    <TableRow
-                      key={order.id}
-                      ref={isHighlighted ? highlightedRowRef : undefined}
-                      className={cn(isHighlighted && "bg-primary/10 outline outline-2 -outline-offset-2 outline-primary/40")}
-                    >
-                      <TableCell>{order.order_number || `#${order.id}`}</TableCell>
-                      <TableCell className="max-w-xs truncate">{itemNames}</TableCell>
-                      <TableCell>{totalQuantity}</TableCell>
-                      <TableCell>
-                        {formatCurrency(order.total ?? order.amount ?? order.price ?? 0)}
-                        {order.coupon_code ? (
-                          <span className="mt-0.5 block text-xs text-primary">
-                            {order.coupon_code} · -{formatCurrency(order.discount ?? 0)}
-                          </span>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={statusVariant(order.status)} className="capitalize">
-                          {order.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{formatDate(order.created_at)}</TableCell>
-                    </TableRow>
+                    <>
+                      <TableRow
+                        key={order.id}
+                        ref={isHighlighted ? highlightedRowRef : undefined}
+                        className={cn(isHighlighted && "bg-primary/10 outline outline-2 -outline-offset-2 outline-primary/40")}
+                      >
+                        <TableCell>{order.order_number || `#${order.id}`}</TableCell>
+                        <TableCell className="max-w-xs truncate">{itemNames}</TableCell>
+                        <TableCell>{totalQuantity}</TableCell>
+                        <TableCell>
+                          {formatCurrency(order.total ?? order.amount ?? order.price ?? 0)}
+                          {order.coupon_code ? (
+                            <span className="mt-0.5 block text-xs text-primary">
+                              {order.coupon_code} · -{formatCurrency(order.discount ?? 0)}
+                            </span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={statusVariant(order.status)} className="capitalize">
+                            {order.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {hasDelivery ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleDelivery(order.id)}
+                            >
+                              <PackageCheckIcon data-icon="inline-start" aria-hidden="true" />
+                              {isExpanded ? "Hide" : "View"}
+                            </Button>
+                          ) : order.status === "completed" ? (
+                            <span className="text-xs text-muted-foreground">No details</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{formatDate(order.created_at)}</TableCell>
+                      </TableRow>
+                      {isExpanded && hasDelivery ? (
+                        <TableRow key={`${order.id}-delivery`}>
+                          <TableCell colSpan={7} className="bg-muted/40">
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                Delivered {order.delivered_at ? formatDate(order.delivered_at) : ""}
+                              </p>
+                              <pre className="whitespace-pre-wrap break-words rounded-lg border border-border bg-card p-3 font-mono text-sm">
+                                {order.delivery_content}
+                              </pre>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </>
                   );
                 })}
               </TableBody>

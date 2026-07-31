@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/StateBlock";
@@ -28,6 +29,11 @@ export default function AdminOrdersPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
 
+  // Phase 5 (product delivery emails): which order row (if any) currently has
+  // its "Delivery info" textarea open, and its draft content.
+  const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(null);
+  const [deliveryDraft, setDeliveryDraft] = useState("");
+
   const onStatusChange = async (order: Order, status: OrderStatus) => {
     if (status === order.status) return;
     setMessage(null);
@@ -37,6 +43,38 @@ export default function AdminOrdersPage() {
       setMessage(response.message || `Order #${order.id} updated to "${status}".`);
     } catch (error) {
       setMessage(extractErrorMessage(error, "Failed to update order status."));
+    } finally {
+      setPendingOrderId(null);
+    }
+  };
+
+  const startDelivery = (order: Order) => {
+    setDeliveringOrderId(order.id);
+    setDeliveryDraft(order.delivery_content ?? "");
+    setMessage(null);
+  };
+
+  const cancelDelivery = () => {
+    setDeliveringOrderId(null);
+    setDeliveryDraft("");
+  };
+
+  const saveDelivery = async (order: Order) => {
+    setMessage(null);
+    setPendingOrderId(order.id);
+    try {
+      // Attaching delivery content always marks the order completed — this is
+      // what triggers the customer's delivery email on the backend.
+      const response = await updateOrder.mutateAsync({
+        orderId: order.id,
+        status: "completed",
+        delivery_content: deliveryDraft.trim(),
+      });
+      setMessage(response.message || `Delivery info saved for order #${order.id}.`);
+      setDeliveringOrderId(null);
+      setDeliveryDraft("");
+    } catch (error) {
+      setMessage(extractErrorMessage(error, "Failed to save delivery info."));
     } finally {
       setPendingOrderId(null);
     }
@@ -104,6 +142,52 @@ export default function AdminOrdersPage() {
         },
       },
       {
+        id: "delivery",
+        header: "Delivery",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const order = row.original;
+          const isBusy = updateOrder.isPending && pendingOrderId === order.id;
+
+          if (deliveringOrderId === order.id) {
+            return (
+              <div className="w-64 space-y-1.5">
+                <textarea
+                  value={deliveryDraft}
+                  onChange={(e) => setDeliveryDraft(e.target.value)}
+                  placeholder="License key, PIN, download link, account credentials..."
+                  rows={3}
+                  className="w-full rounded-lg border border-input bg-transparent p-2 font-mono text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" disabled={isBusy || !deliveryDraft.trim()} onClick={() => void saveDelivery(order)}>
+                    {isBusy ? "Sending..." : "Save & notify"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={cancelDelivery}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-1">
+              {order.delivery_content ? (
+                <p className="max-w-[220px] truncate font-mono text-xs text-muted-foreground" title={order.delivery_content}>
+                  {order.delivery_content}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Not delivered yet</p>
+              )}
+              <Button size="sm" variant="outline" onClick={() => startDelivery(order)}>
+                {order.delivery_content ? "Edit" : "Add delivery info"}
+              </Button>
+            </div>
+          );
+        },
+      },
+      {
         id: "created",
         header: "Created",
         accessorFn: (row) => row.created_at ?? "",
@@ -111,10 +195,10 @@ export default function AdminOrdersPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [updateOrder.isPending, pendingOrderId],
+    [updateOrder.isPending, pendingOrderId, deliveringOrderId, deliveryDraft],
   );
 
-  if (orders.isPending) return <TableSkeleton rows={6} cols={5} />;
+  if (orders.isPending) return <TableSkeleton rows={6} cols={6} />;
   if (orders.error) return <ErrorBlock message={extractErrorMessage(orders.error, "Failed to load orders.")} />;
   if (!orders.data?.data.length) {
     return <EmptyBlock title="No orders" description="No orders have been placed yet." />;
@@ -126,7 +210,9 @@ export default function AdminOrdersPage() {
         <h1 className="font-heading text-3xl font-bold">Admin · Orders</h1>
         <p className="mt-2 text-muted-foreground">
           View every order placed on the platform and update its status. Changing a status to
-          &quot;completed&quot; or &quot;failed&quot; notifies the customer.
+          &quot;completed&quot; or &quot;failed&quot; notifies the customer. Adding delivery info (a
+          license key, PIN, download link, etc.) automatically marks the order completed and emails
+          it to the customer.
         </p>
       </div>
       {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}

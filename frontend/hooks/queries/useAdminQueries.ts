@@ -251,14 +251,17 @@ export function useAdminOrderUpdateMutation() {
       orderId,
       status,
       provider_reference,
+      delivery_content,
     }: {
       orderId: number;
       status: OrderStatus;
       provider_reference?: string;
+      /** Phase 5: sending this alongside status "completed" triggers a delivery email. */
+      delivery_content?: string;
     }) => {
       const response = await api.put<{ success: boolean; message: string; data: Order }>(
         `/admin/orders/${orderId}`,
-        { status, provider_reference },
+        { status, provider_reference, delivery_content },
       );
       return response.data;
     },

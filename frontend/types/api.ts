@@ -125,6 +125,9 @@ export interface Order {
   /** Phase 4: set only when a coupon was applied at checkout. */
   coupon_code?: string | null;
   discount?: number | string | null;
+  /** Phase 5: set by an admin when fulfilling the order; triggers a delivery email once. */
+  delivery_content?: string | null;
+  delivered_at?: string | null;
   payment_method?: string | null;
   payload?: Record<string, unknown> | null;
   provider_reference?: string | null;
