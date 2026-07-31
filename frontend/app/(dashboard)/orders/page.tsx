@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ShoppingCartIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,9 +30,19 @@ export default function OrdersPage() {
   const createOrder = useCreateOrderMutation();
   const searchParams = useSearchParams();
   const placedOrderId = searchParams.get("placed");
+  const highlightRef = searchParams.get("ref");
   const [serviceId, setServiceId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [message, setMessage] = useState<string | null>(null);
+  const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
+
+  useEffect(() => {
+    if (highlightRef && highlightedRowRef.current) {
+      highlightedRowRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    // Re-run once `orders.data` finishes loading (the row/ref doesn't exist
+    // until the table has actually rendered past the loading skeleton).
+  }, [highlightRef, orders.data]);
 
   const firstServiceId = useMemo(() => services.data?.[0]?.id?.toString() || "", [services.data]);
   const selectedServiceId = serviceId || firstServiceId;
@@ -70,6 +81,11 @@ export default function OrdersPage() {
       {placedOrderId ? (
         <div className="rounded-xl border border-success/20 bg-success/10 p-4 text-sm text-success">
           Order #{placedOrderId} placed successfully via checkout.
+        </div>
+      ) : null}
+      {highlightRef ? (
+        <div className="rounded-xl border border-primary/20 bg-primary/10 p-4 text-sm text-primary">
+          Showing order <span className="font-mono font-medium">{highlightRef}</span> from your wallet transaction, highlighted below.
         </div>
       ) : null}
       <Card>
@@ -133,8 +149,13 @@ export default function OrdersPage() {
                   const totalQuantity = order.items?.length
                     ? order.items.reduce((sum, item) => sum + item.quantity, 0)
                     : (order.quantity ?? "—");
+                  const isHighlighted = Boolean(highlightRef) && (order.reference === highlightRef || order.order_number === highlightRef);
                   return (
-                    <TableRow key={order.id}>
+                    <TableRow
+                      key={order.id}
+                      ref={isHighlighted ? highlightedRowRef : undefined}
+                      className={cn(isHighlighted && "bg-primary/10 outline outline-2 -outline-offset-2 outline-primary/40")}
+                    >
                       <TableCell>{order.order_number || `#${order.id}`}</TableCell>
                       <TableCell className="max-w-xs truncate">{itemNames}</TableCell>
                       <TableCell>{totalQuantity}</TableCell>

@@ -31,8 +31,17 @@ class WalletController extends Controller
     public function transactions(Request $request)
     {
         $transactions = Transaction::where('user_id', $request->user()->id)
+            ->with('order:id,reference,order_number,status')
             ->latest()
             ->paginate(20);
+
+        // Only purchase-type transactions are expected to resolve an order
+        // (see Transaction::order() for why other types naturally won't).
+        $transactions->getCollection()->each(function (Transaction $transaction) {
+            if ($transaction->type !== 'purchase') {
+                $transaction->setRelation('order', null);
+            }
+        });
 
         return response()->json([
             'success' => true,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ExternalLinkIcon, ReceiptTextIcon, WalletIcon } from "lucide-react";
+import { ArrowUpRightIcon, ExternalLinkIcon, ReceiptTextIcon, WalletIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -129,8 +129,17 @@ export default function WalletPage() {
                   <TableRow key={transaction.id}>
                     <TableCell>{transaction.reference || `#${transaction.id}`}</TableCell>
                     <TableCell className="capitalize">{transaction.type}</TableCell>
-                    <TableCell className="max-w-xs truncate text-muted-foreground">
-                      {transaction.description || "—"}
+                    <TableCell className="max-w-xs text-muted-foreground">
+                      <span className="block truncate">{transaction.description || "—"}</span>
+                      {transaction.order ? (
+                        <Link
+                          href={`/orders?ref=${encodeURIComponent(transaction.order.reference || "")}`}
+                          className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                        >
+                          View order
+                          <ArrowUpRightIcon className="size-3" aria-hidden="true" />
+                        </Link>
+                      ) : null}
                     </TableCell>
                     <TableCell>{formatCurrency(transaction.amount)}</TableCell>
                     <TableCell>

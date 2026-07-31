@@ -149,6 +149,9 @@ export interface Transaction {
   created_at?: string;
   updated_at?: string;
   user?: User;
+  /** Populated only for `type === "purchase"` transactions — the order that
+   * was paid for. Null for deposit/credit/debit transactions. */
+  order?: Pick<Order, "id" | "reference" | "order_number" | "status"> | null;
 }
 
 export interface NotificationItem {
