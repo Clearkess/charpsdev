@@ -566,3 +566,58 @@ Before this, re-purchasing something you'd bought before meant manually finding 
 ### Deployment status
 
 Not yet deployed to production (Railway backend / Vercel frontend) — built and verified locally only, per the same discipline followed for every prior phase. Awaiting explicit instruction to deploy.
+
+## 18) Phase 10 — Additional Security Hardening
+
+Tenth and final phase of the 10-phase roadmap. Built additively on top of Phases 1–9 (nothing in checkout, wallet, coupons, settings, delivery emails, notifications, analytics, or the Phase 9 user-facing features was touched), verified locally against SQLite + `php artisan serve` first, and **not yet deployed to production** as of this writing. Like Phases 6 and 9, "additional security hardening" didn't name specific functionality up front, so the scope was determined by auditing the real codebase for concrete, unambiguous gaps rather than guessing broadly. The audit covered: route-level throttling, CORS configuration, response headers, Sanctum token lifetime, Paystack webhook signature verification, payment idempotency, admin-role enforcement, mass-assignment safety on `is_admin`, and the unused `ApiKey` model. Three real gaps were found and fixed; several other areas were checked and confirmed already secure (documented below rather than silently ignored).
+
+### 1. Rate limiting on `/login` and `/register`
+
+Before this, `/login` and `/register` had **zero** brute-force protection — only `/email/verification-notification` had a `throttle:6,1` middleware. Two named rate limiters were registered in `AppServiceProvider::boot()`:
+
+- `login` — keyed by **`email + IP`** (`Limit::perMinute(5)->by($email.'|'.$request->ip())`), not IP alone. This means a distributed brute-force attempt against one account is still throttled even when spread across many source IPs, while unrelated users sharing an IP (NAT, mobile carrier, office network) are never affected by someone else's failed attempts against a different account.
+- `register` — keyed by IP alone (`Limit::perMinute(5)`), since there's no target-account identity to key on for signup abuse.
+
+Applied via `->middleware('throttle:login')` / `->middleware('throttle:register')` directly on the two routes in `routes/api.php`, the same pattern the existing `throttle:6,1` on verification-notification already used.
+
+### 2. Restrictive CORS (`config/cors.php`)
+
+The app had **no** app-level `config/cors.php` override, so Laravel 13 was silently falling back to the framework's shipped default (`vendor/laravel/framework/config/cors.php`), which sets `'allowed_origins' => ['*']` — any origin on the internet could call `/api/*`. A new app-level `config/cors.php` was added that reads a comma-separated `FRONTEND_URL` env var (defaulting to `http://localhost:3000` for local dev) into `allowed_origins`, restricting cross-origin API access to only the known frontend origin(s). `supports_credentials` stays `false` since auth is Sanctum Bearer tokens, not cookies, across origins — no behavior change needed there. Added `FRONTEND_URL=https://YOUR-VERCEL-FRONTEND-DOMAIN` to both `.env.example` and `.env.railway.example` so the production Railway deployment isn't silently left on the wide-open default once this ships — it must be set to the real Vercel domain(s) before/at deploy time.
+
+### 3. Security response headers (global middleware)
+
+No middleware anywhere set any hardening response headers. Added `app/Http/Middleware/SecurityHeaders.php`, registered globally via `$middleware->append(...)` in `bootstrap/app.php`, setting on every response:
+
+- `X-Content-Type-Options: nosniff` — stops browsers from MIME-sniffing JSON responses as something else.
+- `X-Frame-Options: DENY` — stops any accidental HTML error page from being framed (clickjacking defense-in-depth).
+- `Referrer-Policy: strict-origin-when-cross-origin` — stops full URLs (which can contain tokens in query strings) from leaking to third-party `Referer` headers.
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` — only set when `$request->isSecure()`, so it never fires on plain-HTTP local dev.
+
+A full CSP was deliberately not added — this is a JSON API with no server-rendered HTML views to constrain, and a hand-tuned CSP for an API-only backend has a poor risk/value ratio (easy to misconfigure, breaks nothing existing if omitted).
+
+### Considered, not changed
+
+- **Sanctum token expiration** — `config/sanctum.php` has `'expiration' => null`, so issued tokens never expire except via explicit logout (`currentAccessToken()->delete()`). Evaluated and **left as-is**: adding an expiration is a genuine behavior change (users would get silently logged out) that wasn't requested and would need product-level UX (refresh flow, "session expired" messaging) to not regress the existing experience. Flagged here rather than silently implemented or silently dropped.
+- **Email-verification enforcement** — the app currently does not gate any endpoint behind `verified` middleware. Evaluated and **left as-is** for the same reason: enforcing it now would break any already-registered unverified user's existing access, which wasn't requested.
+- **`ApiKey` model** — `app/Models/ApiKey.php` (fillable: `name, key, provider, active`) has **zero references** in any controller — confirmed dead/unused code, not wired into any live endpoint. No security exposure since nothing reads or writes it; left untouched rather than deleting code outside the requested scope.
+
+### Confirmed already secure (no changes needed)
+
+- **Paystack webhook signature verification** — `PaymentController::webhook()` computes `hash_hmac('sha512', $request->getContent(), config('paystack.secret_key'))` and compares against the `x-paystack-signature` header using the timing-safe `hash_equals()`. No forgery risk.
+- **Payment idempotency & ownership** — both `PaymentController::verify()` and `::webhook()` check `Transaction::where('reference', $reference)->exists()` before crediting a wallet, preventing double-crediting from replayed webhooks/verify calls; `verify()` additionally checks `metadata.user_id` matches the authenticated user before crediting.
+- **Admin-role enforcement** — `AdminMiddleware` correctly checks `$request->user()->is_admin` and returns 403 otherwise; applied consistently across all `/api/admin/*` routes.
+- **Mass-assignment safety on `is_admin`** — `User::$fillable` includes `is_admin`, but `RegisterRequest`/`UpdateProfileRequest` validation rules never expose it as an accepted field, so a user cannot self-promote via mass assignment. The only other `is_admin` reference in the codebase is a *query* (`CheckoutController.php`, finding admins to notify on low stock — a Phase 6 feature), not user input.
+
+### Verification performed (local SQLite + local dev server only)
+
+- `php -l` clean on all new/changed backend files (`AppServiceProvider.php`, `routes/api.php`, `config/cors.php`, `app/Http/Middleware/SecurityHeaders.php`, `bootstrap/app.php`).
+- `php artisan test` — 2/2 passing, no regressions (run before and after the changes).
+- Manual curl testing against `php artisan serve`:
+  - Rate limiting: 7 rapid `POST /api/login` attempts with the same wrong-password email → attempts 1–5 return `401`, attempts 6–7 return `429` with `X-RateLimit-Limit: 5`, `X-RateLimit-Remaining: 0`, and a `Retry-After` header. Confirmed a **different** email from the same IP (a real seeded user, correct password) is unaffected — still `200` — proving the limiter is keyed by `email+IP`, not IP alone. Same 5-per-minute → `429` pattern confirmed for `POST /api/register` (IP-keyed), with the 5 test accounts it created cleaned up afterward.
+  - CORS: `OPTIONS /api/login` preflight with `Origin: http://localhost:3000` (the configured default) returns a matching `Access-Control-Allow-Origin`; the same preflight with `Origin: https://evil.com` returns an `Access-Control-Allow-Origin` that does **not** match the requesting origin — real browsers block the follow-up request in this case (CORS is a browser-enforced boundary; curl itself doesn't enforce it, which is why the mismatch, not an outright missing header, is the correct signal to check for).
+  - Security headers: confirmed `X-Content-Type-Options`, `X-Frame-Options`, and `Referrer-Policy` present on both a plain `GET /up` and a real `POST /api/login` response.
+- No frontend changes in this phase — `npm run build` not re-run (nothing in `frontend/` was touched).
+
+### Deployment status
+
+Not yet deployed to production (Railway backend / Vercel frontend) — built and verified locally only, per the same discipline followed for every prior phase. Awaiting explicit instruction to deploy. **Before deploying**, the production Railway environment must have `FRONTEND_URL` set to the real Vercel domain(s) (comma-separated if more than one) — without it, CORS falls back to the `http://localhost:3000` default and the production frontend would be blocked from calling the API.

@@ -33,8 +33,8 @@ use App\Http\Controllers\Api\Admin\ProviderController as AdminProviderController
 use App\Http\Controllers\Api\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Api\Admin\SettingController as AdminSettingController;
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:register');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
 Route::post('/forgot-password', function (Request $request) {
     $request->validate([

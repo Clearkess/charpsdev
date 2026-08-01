@@ -12,15 +12,17 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
-    ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/login');
+        ->withMiddleware(function (Middleware $middleware): void {
+            $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/login');
 
-        $middleware->alias([
-            'admin' => \App\Http\Middleware\AdminMiddleware::class,
-            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
-        ]);
-    })
+            $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+
+            $middleware->alias([
+                'admin' => \App\Http\Middleware\AdminMiddleware::class,
+                'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
+                'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            ]);
+        })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
