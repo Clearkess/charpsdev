@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import BrandMark from "@/components/common/BrandMark";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import BottomNav from "@/components/layout/BottomNav";
 import { useAuth } from "@/hooks/useAuth";
@@ -56,12 +57,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 px-6 py-5">
-        <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground font-heading text-sm font-bold">
-          {APP_NAME.slice(0, 2).toUpperCase()}
-        </div>
         <div>
-          <p className="font-heading text-base font-semibold leading-tight">{APP_NAME}</p>
-          <p className="text-xs text-muted-foreground">Marketplace dashboard</p>
+          <BrandMark className="h-8 w-auto" />
+          <p className="mt-1 text-xs text-muted-foreground">Marketplace dashboard</p>
         </div>
       </div>
 
@@ -229,7 +227,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             >
               <MenuIcon className="size-5" aria-hidden="true" />
             </button>
-            <p className="font-heading text-lg font-semibold md:hidden">{APP_NAME}</p>
+            <BrandMark className="h-7 w-auto md:hidden" />
             <TopbarSearch />
             <div className="ml-auto flex items-center gap-3">
               {user?.is_admin ? <Badge variant="secondary">Admin</Badge> : null}
