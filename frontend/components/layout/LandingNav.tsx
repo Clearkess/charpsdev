@@ -17,7 +17,7 @@ export default function LandingNav() {
   return (
     <nav className="landing-nav">
       <Link href="/" className="brand" onClick={close}>
-        <span>Charps</span>Dev
+        <img src="/logo.png" alt="CharpsDev" className="brand-logo" />
       </Link>
 
       <div className="nav-links">

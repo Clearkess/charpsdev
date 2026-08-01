@@ -54,7 +54,7 @@ export default function HomePage() {
 
       <section className="final-cta"><Sparkles size={22}/><h2>Ready to simplify your<br/><span>digital experience?</span></h2><p>Create your CharpsDev account and explore available services today.</p><Link className="primary-btn" href="/register">Get Started Now <ArrowRight size={18}/></Link></section>
 
-      <footer><Link href="/" className="brand"><span>Charps</span>Dev</Link><p>Digital services, made simple.</p><div><Link href="/login">Log in</Link><Link href="/register">Create account</Link><Link href="/services">Services</Link></div><small>© {new Date().getFullYear()} CharpsDev. All rights reserved.</small></footer>
+      <footer><Link href="/" className="brand"><img src="/logo.png" alt="CharpsDev" className="brand-logo" /></Link><p>Digital services, made simple.</p><div><Link href="/login">Log in</Link><Link href="/register">Create account</Link><Link href="/services">Services</Link></div><small>© {new Date().getFullYear()} CharpsDev. All rights reserved.</small></footer>
     </main>
   );
 }
