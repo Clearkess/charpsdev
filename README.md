@@ -658,3 +658,23 @@ Fixed with `$middleware->trustProxies(at: '*')` in `bootstrap/app.php` — trust
 - Playwright console capture on `/login` — zero console messages, no client-side errors.
 
 Both backend and frontend are now live and serving Phases 4–10 in production.
+
+## 19) Public Landing Page Redesign (`/`)
+
+Outside the 10-phase roadmap (roadmap is fully complete as of §18). The user supplied `charpsdev-landing-page-redesign.zip` — a full snapshot of an earlier point in this repo (missing all Phase 4–9 admin pages/components, confirmed by diffing file lists) in which exactly two files had a newer timestamp than everything else: `frontend/app/page.tsx` and `frontend/app/globals.css`. This made the actual deliverable unambiguous without needing to ask: a hand-built public marketing landing page for `/`, meant to be lifted out of that stale snapshot and integrated into the current (Phase 1–10) codebase, not a full repo replacement.
+
+**What changed:**
+
+- `frontend/app/page.tsx` — replaced. Previously just `redirect("/dashboard")` (so every visitor to `/`, logged in or not, ended up at `/login` via the dashboard's route guard — there was no actual public marketing page). Now a full static landing page: nav with anchor links (`#services`, `#how-it-works`, `#why-us`), hero section, stats strip, a 4-item services grid, a "how it works" steps section, a security/trust section, a final CTA, and a footer. Uses `lucide-react` icons (`ArrowRight`, `BadgeCheck`, `Bolt`, `CreditCard`, `Globe2`, `Menu`, `ShieldCheck`, `Sparkles`, `WalletCards`) — confirmed all exist in the already-installed `lucide-react@^1.27.0` (no dependency bump needed) before wiring it in.
+- `frontend/app/globals.css` — **merged, not overwritten.** The zip's version of this file deleted the entire `@theme`/`.dark` CSS-variable system (`--color-background`, `--color-primary`, `--color-foreground`, etc.) that every other page and UI primitive in the app depends on via Tailwind classes like `bg-background`/`text-foreground`/`bg-primary` — confirmed via `grep -rl` that 40+ files (all dashboard/admin pages, every `components/ui/*` primitive, every auth form) reference these classes. Blindly copying the zip's file would have silently broken theming/dark-mode across the entire authenticated app to redesign one public page. Instead, only the new, self-contained `.landing`-scoped CSS block (its own local vars — `--gold`, `--ink`, `--panel`, etc. — no dependency on the `--color-*` system) was appended to the existing `globals.css`, leaving the original theme/dark-mode system fully intact.
+
+**Known limitation carried over from the supplied design, not introduced by the integration:** the mobile hamburger (`<Menu>` icon, shown under 800px width) has no `onClick`/state — it renders but doesn't open a menu, so mobile visitors can only reach `/login`/`/register`/`/services` via the footer links until this is wired up (not done here, since it wasn't part of what was supplied — flagging rather than silently leaving it or silently scope-creeping a fix in).
+
+**Verification performed:**
+
+- `npm run build` (Next.js/Turbopack) — compiled successfully, TypeScript clean, all 26 routes generated, `/` now prerendered as static content (previously it was a redirect-only route).
+- Confirmed in the compiled CSS output that both the original `--color-primary`/`--color-background`/etc. variable declarations **and** the new `.landing`/`.hero`/`.service-card` rules are present (`grep -c` on the built CSS chunk) — the merge didn't drop either side.
+- Started the built app locally (`pm2` + `next start`), curled `/` (200, contains `landing-nav`/`hero`/`service-card` markup) and `/login` (200, unaffected) and `/dashboard` (200, still redirects unauthenticated visitors via the existing `proxy.ts` middleware — its matcher list never included `/`, so this change doesn't touch route-guard behavior at all).
+- Playwright console capture on both `/` and `/login`: the only console messages on either page are the pre-existing, unrelated `Vercel Web Analytics`/`Speed Insights` 404s (expected in the sandbox, which isn't a real Vercel deployment) — zero errors attributable to this change, and identical between the two pages, confirming the redesign didn't introduce anything new.
+
+**Deployment status:** Implemented, built, and verified locally only. Not yet pushed to GitHub or deployed to Railway/Vercel production — pending confirmation from the user before shipping a UI-facing (as opposed to backend-only, as every prior production deploy in this project has been) change live.
