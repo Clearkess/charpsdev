@@ -25,4 +25,8 @@ export const queryKeys = {
   adminAnalytics: (days: number) => ["admin", "analytics", days] as const,
   pushPublicKey: ["push", "public-key"] as const,
   serviceReviews: (serviceId: number) => ["services", serviceId, "reviews"] as const,
+  virtualNumberProviders: ["virtual-numbers", "providers"] as const,
+  virtualNumberCountries: (provider: string) => ["virtual-numbers", provider, "countries"] as const,
+  virtualNumberServices: (provider: string, country: string) => ["virtual-numbers", provider, country, "services"] as const,
+  virtualNumberOrders: ["virtual-numbers", "orders"] as const,
 };

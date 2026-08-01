@@ -341,6 +341,70 @@ export interface Review {
   user?: { id: number; name: string };
 }
 
+/**
+ * Phase 7 (Provider API Sync) follow-up: virtual-number/SMS-OTP rentals
+ * from 5SIM / SMS-Man / OnlineSIM. Browsing is provider-scoped — each
+ * provider has its own incompatible country/service coding scheme (5SIM:
+ * English-word slugs, SMS-Man: numeric ids, OnlineSIM: E.164 dialling
+ * codes) — so `country`/`code` below are always opaque, provider-native
+ * identifiers passed straight back to that same provider's other
+ * endpoints, never compared across providers.
+ */
+export interface VirtualNumberProviderOption {
+  id: number;
+  slug: string;
+  name: string;
+}
+
+export interface VirtualNumberCountry {
+  code: string;
+  name: string;
+}
+
+export interface VirtualNumberServiceOption {
+  code: string;
+  name: string;
+  cost_usd: number;
+  count: number;
+}
+
+export type VirtualNumberOrderStatus =
+  | "pending"
+  | "waiting_code"
+  | "received"
+  | "cancelled"
+  | "expired"
+  | "refunded"
+  | "failed";
+
+export interface VirtualNumberOrder {
+  id: number;
+  user_id?: number;
+  provider_id?: number | null;
+  provider_slug: string;
+  external_id: string;
+  phone_number?: string | null;
+  country: string;
+  service_code: string;
+  service_name?: string | null;
+  operator?: string | null;
+  cost_usd: number | string;
+  exchange_rate: number | string;
+  markup_percent: number | string;
+  price_ngn: number | string;
+  currency: string;
+  status: VirtualNumberOrderStatus;
+  sms_code?: string | null;
+  sms_text?: string | null;
+  reference: string;
+  expires_at?: string | null;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
+  meta?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 /** Response shape of GET /services/{service}/reviews. */
 export interface ReviewsResponse {
   reviews: Review[];

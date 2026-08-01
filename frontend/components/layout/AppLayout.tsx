@@ -10,6 +10,7 @@ import {
   LogOutIcon,
   MenuIcon,
   PackageIcon,
+  PhoneIcon,
   SearchIcon,
   ShieldCheckIcon,
   ShoppingCartIcon,
@@ -34,6 +35,7 @@ import { useUiStore } from "@/store/uiStore";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboardIcon },
   { href: "/services", label: "Services", icon: PackageIcon },
+  { href: "/virtual-numbers", label: "Virtual Numbers", icon: PhoneIcon },
   { href: "/cart", label: "Cart", icon: ShoppingCartIcon },
   { href: "/wallet", label: "Wallet", icon: WalletIcon },
   { href: "/orders", label: "Orders", icon: ClipboardListIcon },

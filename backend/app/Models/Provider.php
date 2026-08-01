@@ -23,4 +23,9 @@ class Provider extends Model
     {
         return $this->hasMany(Service::class);
     }
+
+    public function virtualNumberOrders(): HasMany
+    {
+        return $this->hasMany(VirtualNumberOrder::class);
+    }
 }

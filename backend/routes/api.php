@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\VirtualNumberController;
 
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\Admin\AdminAnalyticsController;
@@ -134,6 +135,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
+
+    // Phase 7 (Provider API Sync) follow-up: virtual-number/SMS-OTP
+    // rentals from 5SIM / SMS-Man / OnlineSIM. Provider-scoped browsing:
+    // pick a provider, then that provider's own countries/services.
+    Route::get('/virtual-numbers/providers', [VirtualNumberController::class, 'providers']);
+    Route::get('/virtual-numbers/{provider}/countries', [VirtualNumberController::class, 'countries']);
+    Route::get('/virtual-numbers/{provider}/services', [VirtualNumberController::class, 'services']);
+    Route::get('/virtual-numbers/orders', [VirtualNumberController::class, 'index']);
+    Route::post('/virtual-numbers/orders', [VirtualNumberController::class, 'store']);
+    Route::get('/virtual-numbers/orders/{virtualNumberOrder}', [VirtualNumberController::class, 'show']);
+    Route::post('/virtual-numbers/orders/{virtualNumberOrder}/poll', [VirtualNumberController::class, 'poll']);
+    Route::post('/virtual-numbers/orders/{virtualNumberOrder}/cancel', [VirtualNumberController::class, 'cancel']);
 
     Route::middleware('admin')->prefix('admin')->group(function () {
         Route::get('/dashboard', [AdminController::class, 'dashboard']);

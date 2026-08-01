@@ -51,6 +51,26 @@ class SettingsSeeder extends Seeder
                 'group' => 'general',
                 'label' => 'Maintenance mode',
             ],
+            // Virtual numbers (5SIM / SMS-Man / OnlineSIM): all three price
+            // in USD while the wallet is NGN-only, so every purchase needs
+            // an FX rate; markup is CharpsDev's margin on top of the raw
+            // provider cost. Both are snapshotted onto the order at
+            // purchase time (see VirtualNumberService) so a later admin
+            // edit here never changes what a past order already charged.
+            [
+                'key' => 'virtual_number_markup_percent',
+                'value' => '20',
+                'type' => 'float',
+                'group' => 'virtual_numbers',
+                'label' => 'Virtual number markup (%)',
+            ],
+            [
+                'key' => 'usd_to_ngn_rate',
+                'value' => '1600',
+                'type' => 'float',
+                'group' => 'virtual_numbers',
+                'label' => 'USD to NGN exchange rate',
+            ],
         ];
 
         foreach ($defaults as $setting) {
