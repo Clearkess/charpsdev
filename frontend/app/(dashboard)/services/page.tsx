@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/StateBlock";
+import StarRating from "@/components/common/StarRating";
 import { useAddToCartMutation } from "@/hooks/queries/useCartQueries";
 import { useCategoriesQuery } from "@/hooks/queries/useCategoriesQuery";
 import { useServicesQuery } from "@/hooks/queries/useServicesQuery";
@@ -175,6 +176,11 @@ function ServiceCard({
         <p className="mt-0.5 text-[0.7rem] uppercase tracking-wide text-muted-foreground">
           {service.category_group?.name || service.category || "uncategorized"}
         </p>
+        {service.reviews_count ? (
+          <div className="mt-1.5">
+            <StarRating rating={Number(service.reviews_avg_rating ?? 0)} count={service.reviews_count} size="sm" />
+          </div>
+        ) : null}
 
         <div className="mt-auto flex items-center justify-between pt-3">
           <PriceTag service={service} />

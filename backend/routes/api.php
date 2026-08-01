@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\CouponController;
+use App\Http\Controllers\Api\ReviewController;
 
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\Admin\AdminAnalyticsController;
@@ -100,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
@@ -110,6 +112,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/push/unsubscribe', [PushSubscriptionController::class, 'unsubscribe']);
 
     Route::get('/services', [ServiceController::class, 'index']);
+    Route::get('/services/{service}/reviews', [ReviewController::class, 'index']);
+    Route::post('/services/{service}/reviews', [ReviewController::class, 'store']);
     Route::get('/categories', [CategoryController::class, 'index']);
 
     Route::get('/cart', [CartController::class, 'index']);

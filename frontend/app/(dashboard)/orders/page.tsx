@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { PackageCheckIcon, ShoppingCartIcon } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { PackageCheckIcon, RepeatIcon, ShoppingCartIcon, StarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,10 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/StateBlock";
+import ReviewFormRow from "@/components/common/ReviewFormRow";
+import { useAddToCartMutation } from "@/hooks/queries/useCartQueries";
 import { useCreateOrderMutation, useOrdersQuery } from "@/hooks/queries/useOrdersQueries";
 import { useServicesQuery } from "@/hooks/queries/useServicesQuery";
 import { extractErrorMessage } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/format";
+import type { Order } from "@/types/api";
 
 function statusVariant(status: string) {
   const normalized = status?.toLowerCase();
@@ -24,10 +27,27 @@ function statusVariant(status: string) {
   return "muted" as const;
 }
 
+/** Every service_id + quantity line in an order, regardless of shape (cart-checkout `items` vs legacy single-service). */
+function orderLines(order: Order): Array<{ service_id: number; quantity: number; name: string }> {
+  if (order.items?.length) {
+    return order.items.map((item) => ({
+      service_id: item.service_id,
+      quantity: item.quantity,
+      name: item.service?.name || `#${item.service_id}`,
+    }));
+  }
+  if (order.service_id) {
+    return [{ service_id: order.service_id, quantity: order.quantity ?? 1, name: order.service?.name || `#${order.service_id}` }];
+  }
+  return [];
+}
+
 export default function OrdersPage() {
+  const router = useRouter();
   const orders = useOrdersQuery();
   const services = useServicesQuery();
   const createOrder = useCreateOrderMutation();
+  const addToCart = useAddToCartMutation();
   const searchParams = useSearchParams();
   const placedOrderId = searchParams.get("placed");
   const highlightRef = searchParams.get("ref");
@@ -36,6 +56,9 @@ export default function OrdersPage() {
   const [message, setMessage] = useState<string | null>(null);
   const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<number>>(new Set());
+  const [expandedReviewIds, setExpandedReviewIds] = useState<Set<number>>(new Set());
+  const [reorderState, setReorderState] = useState<Record<number, string>>({});
+  const [reorderingId, setReorderingId] = useState<number | null>(null);
 
   const toggleDelivery = (orderId: number) => {
     setExpandedOrderIds((prev) => {
@@ -44,6 +67,40 @@ export default function OrdersPage() {
       else next.add(orderId);
       return next;
     });
+  };
+
+  const toggleReview = (orderId: number) => {
+    setExpandedReviewIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
+
+  /**
+   * Phase 9 (user-facing features): "Buy again" — re-adds every line from a
+   * past order to the cart at today's price/stock (sequential, so a
+   * mid-loop stock failure on one line still leaves the earlier lines added
+   * rather than silently losing them), then jumps to the Cart page. No new
+   * backend endpoint needed — this just replays existing `POST /api/cart`
+   * calls the same way manually adding each item would.
+   */
+  const onReorder = async (order: Order) => {
+    const lines = orderLines(order);
+    if (!lines.length) return;
+    setReorderingId(order.id);
+    setReorderState((prev) => ({ ...prev, [order.id]: "" }));
+    try {
+      for (const line of lines) {
+        await addToCart.mutateAsync({ service_id: line.service_id, quantity: line.quantity });
+      }
+      router.push("/cart");
+    } catch (error) {
+      setReorderState((prev) => ({ ...prev, [order.id]: extractErrorMessage(error, "Failed to reorder.") }));
+    } finally {
+      setReorderingId(null);
+    }
   };
 
   useEffect(() => {
@@ -150,6 +207,7 @@ export default function OrdersPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Delivery</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -163,6 +221,10 @@ export default function OrdersPage() {
                   const isHighlighted = Boolean(highlightRef) && (order.reference === highlightRef || order.order_number === highlightRef);
                   const hasDelivery = Boolean(order.delivery_content);
                   const isExpanded = expandedOrderIds.has(order.id);
+                  const isCompleted = order.status === "completed";
+                  const isReviewExpanded = expandedReviewIds.has(order.id);
+                  const lines = orderLines(order);
+                  const reorderError = reorderState[order.id];
                   return (
                     <>
                       <TableRow
@@ -204,10 +266,38 @@ export default function OrdersPage() {
                           )}
                         </TableCell>
                         <TableCell>{formatDate(order.created_at)}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col items-start gap-1.5">
+                            {lines.length ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={reorderingId === order.id}
+                                onClick={() => onReorder(order)}
+                              >
+                                <RepeatIcon data-icon="inline-start" aria-hidden="true" />
+                                {reorderingId === order.id ? "Adding..." : "Buy again"}
+                              </Button>
+                            ) : null}
+                            {isCompleted ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleReview(order.id)}
+                              >
+                                <StarIcon data-icon="inline-start" aria-hidden="true" />
+                                {isReviewExpanded ? "Hide review" : "Rate & review"}
+                              </Button>
+                            ) : null}
+                            {reorderError ? <p className="text-xs text-destructive">{reorderError}</p> : null}
+                          </div>
+                        </TableCell>
                       </TableRow>
                       {isExpanded && hasDelivery ? (
                         <TableRow key={`${order.id}-delivery`}>
-                          <TableCell colSpan={7} className="bg-muted/40">
+                          <TableCell colSpan={8} className="bg-muted/40">
                             <div className="space-y-1">
                               <p className="text-xs font-medium text-muted-foreground">
                                 Delivered {order.delivered_at ? formatDate(order.delivered_at) : ""}
@@ -215,6 +305,17 @@ export default function OrdersPage() {
                               <pre className="whitespace-pre-wrap break-words rounded-lg border border-border bg-card p-3 font-mono text-sm">
                                 {order.delivery_content}
                               </pre>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                      {isReviewExpanded && isCompleted ? (
+                        <TableRow key={`${order.id}-review`}>
+                          <TableCell colSpan={8} className="bg-muted/40">
+                            <div className="space-y-2">
+                              {lines.map((line) => (
+                                <ReviewFormRow key={line.service_id} serviceId={line.service_id} serviceName={line.name} />
+                              ))}
                             </div>
                           </TableCell>
                         </TableRow>

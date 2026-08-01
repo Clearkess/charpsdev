@@ -522,3 +522,47 @@ The existing `/admin/dashboard` page (`AdminController::dashboard()` / `chartDat
 ### Deployment status
 
 Not yet deployed to production (Railway backend / Vercel frontend) — built and verified locally only, per the same discipline followed for every prior phase. Awaiting explicit instruction to deploy.
+
+## 17) Phase 9 — User-Facing Features
+
+Ninth phase of the 10-phase roadmap. Built additively on top of Phases 1–8 (checkout, wallet, coupons, settings, delivery emails, notifications, analytics all untouched), tested locally against SQLite first, and **not yet deployed to production** as of this writing. Unlike prior phases, "user-facing features" didn't name specific functionality up front, so the scope was determined by investigating the existing user-facing app for concrete, unambiguous gaps (the same way the Phase 6 gap-finding was done) rather than guessing broadly. Three gaps were found and built:
+
+### 1. Change password
+
+Before this, the **only** way to change a password was the forgot/reset-password email flow — there was no way to change it while logged in. `ProfileController::updatePassword()` (`PUT /api/profile/password`) requires `current_password` (validated with Laravel's built-in `current_password` rule, which re-checks the hash against the authenticated user's own password) plus a `confirmed`, `min:8` new password — the same `min:8` rule `RegisterRequest` already uses, for consistency. A new "Change password" card was added to the Profile page, self-contained from the existing name/email edit form.
+
+### 2. Service reviews & ratings
+
+The biggest addition — a natural marketplace feature that didn't exist in any form (no `reviews`/`ratings` table, column, or UI anywhere).
+
+- New `reviews` table: `user_id`, `service_id`, `order_id` (nullable — survives if that order is later deleted), `rating` (1-5), `comment` (nullable). A **unique index on `(user_id, service_id)`** means a user can only ever have one review per service — resubmitting updates the existing row (`updateOrCreate`) rather than creating a second one, so the average can't be inflated by the same buyer rating a service repeatedly.
+- `ReviewController::store()` (`POST /api/services/{service}/reviews`) enforces the purchase-eligibility rule: the user must have an order with `status: completed` containing that service, checked across **both** order shapes (cart-checkout `order_items` rows and the legacy single-service `orders.service_id` column) via a single `orWhereHas` query — the same dual-shape pattern established in Phase 5/8. No completed order for that service → 403, not a validation error.
+- `ReviewController::index()` (`GET /api/services/{service}/reviews`) returns every review (with reviewer name), the average rating, count, and the requesting user's own review (`my_review`) so the frontend can label the form "Update review" vs "Submit review" without a second lookup.
+- `ServiceController::index()` now eager-loads `withAvg('reviews', 'rating')` / `withCount('reviews')`, so every service in the catalog listing already carries `reviews_avg_rating`/`reviews_count` with no extra round trip.
+
+### 3. Reorder ("Buy again")
+
+Before this, re-purchasing something you'd bought before meant manually finding it again in the catalog. A "Buy again" button on each Orders row re-adds every line from that order (handling both order shapes the same way reviews do) to the cart via the **existing** `POST /api/cart` endpoint — no new backend endpoint needed, it just replays the same calls manually adding each item would make — then redirects to the Cart page. Lines are added sequentially so a mid-loop stock failure on one line still leaves the earlier lines added rather than losing them silently; any failure is surfaced under the row.
+
+### Frontend
+
+- New types: `Review`, `ReviewsResponse`; `Service` gained `reviews_avg_rating`/`reviews_count`.
+- New hooks: `useServiceReviewsQuery(serviceId)`, `useSubmitReviewMutation(serviceId)` (`hooks/queries/useReviewsQueries.ts`); `useUpdatePasswordMutation()` added to `useProfileQuery.ts`.
+- New shared `StarRating` component (`components/common/StarRating.tsx`) — read-only mode (supports fractional ratings, e.g. an average of 4.33, via a proportional clip overlay) used on Service cards; interactive/clickable mode used by the review form.
+- New `ReviewFormRow` component (`components/common/ReviewFormRow.tsx`) — one "rate this purchase" row per service, pre-filled if the user already reviewed it.
+- **Services page**: each card shows a star rating + review count under the category label, whenever `reviews_count > 0`.
+- **Orders page**: new "Actions" column per row — "Buy again" (all orders with at least one resolvable line) and "Rate & review" (completed orders only), the latter expanding an inline panel with one `ReviewFormRow` per line item, following the same expand/collapse pattern already used for the Phase 5 delivery-details toggle.
+- **Profile page**: new "Change password" card between the existing profile-details card and the push-notifications card.
+
+### Verification performed (local SQLite + local dev server only)
+
+- `php -l` clean on all new/changed backend files; migration applied cleanly (`php artisan migrate --force`); all new routes confirmed via `php artisan route:list`.
+- Reviews: submitted a review for a service the test user had a completed order for (201, correct data) → resubmitted with a different rating/comment (200 "updated", confirmed still exactly 1 row in the table — no duplicate) → attempted a review for a service the same user had **never** completed an order for (correctly 403, not a validation error) → attempted `rating: 6` (correctly 422).
+- Change password: wrong `current_password` (422, field-specific message) → new password under 8 chars (422) → correct current password + valid new password (200) → confirmed via `/api/login` that the **old** password is now rejected (401) and reset it back for test cleanliness.
+- Reorder: verified the exact `POST /api/cart` calls the "Buy again" button makes (for both a legacy single-service order and an `order_items`-based order) against the real endpoint — both lines land correctly in the cart with the right quantities and a correct running total.
+- `php artisan test` — 2/2 passing, no regressions.
+- `npm run build` (Next.js 16 + Turbopack) — compiles cleanly with **zero TypeScript errors**, 29 routes (no new top-level route — reviews/password live inside the existing Services/Orders/Profile pages).
+
+### Deployment status
+
+Not yet deployed to production (Railway backend / Vercel frontend) — built and verified locally only, per the same discipline followed for every prior phase. Awaiting explicit instruction to deploy.

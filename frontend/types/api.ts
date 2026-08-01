@@ -82,6 +82,10 @@ export interface Service {
   provider?: { id: number; name: string } | null;
   created_at?: string;
   updated_at?: string;
+  /** Phase 9 (user-facing features): from `withAvg('reviews', 'rating')` — null until the service has at least one review. */
+  reviews_avg_rating?: number | string | null;
+  /** Phase 9 (user-facing features): from `withCount('reviews')`. */
+  reviews_count?: number;
 }
 
 export interface CartItem {
@@ -317,4 +321,31 @@ export interface Setting {
   label?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+/**
+ * Phase 9 (user-facing features): a review may only be left by a user with
+ * a completed order for that service (enforced server-side); resubmitting
+ * updates the same row rather than creating a new one (unique user+service
+ * index on the backend).
+ */
+export interface Review {
+  id: number;
+  user_id: number;
+  service_id: number;
+  order_id?: number | null;
+  rating: number;
+  comment?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  user?: { id: number; name: string };
+}
+
+/** Response shape of GET /services/{service}/reviews. */
+export interface ReviewsResponse {
+  reviews: Review[];
+  average_rating: number | null;
+  reviews_count: number;
+  /** The authenticated user's own review for this service, if any — lets the UI pre-fill/label the form as "Edit your review" instead of "Write a review". */
+  my_review: Review | null;
 }

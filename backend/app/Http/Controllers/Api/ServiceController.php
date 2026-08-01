@@ -10,8 +10,13 @@ class ServiceController extends Controller
 {
     public function index(Request $request)
     {
+        // Phase 9 (user-facing features): expose average_rating / reviews_count
+        // on every service so the catalog can show a star rating without a
+        // second round trip per card.
         $query = Service::query()
             ->with('categoryGroup')
+            ->withAvg('reviews', 'rating')
+            ->withCount('reviews')
             ->where('active', true);
 
         if ($request->filled('category_id')) {

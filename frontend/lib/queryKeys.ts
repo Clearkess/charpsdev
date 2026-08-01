@@ -24,4 +24,5 @@ export const queryKeys = {
   adminSettings: ["admin", "settings"] as const,
   adminAnalytics: (days: number) => ["admin", "analytics", days] as const,
   pushPublicKey: ["push", "public-key"] as const,
+  serviceReviews: (serviceId: number) => ["services", serviceId, "reviews"] as const,
 };

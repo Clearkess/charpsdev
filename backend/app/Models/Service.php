@@ -42,6 +42,11 @@ class Service extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
     /**
      * Relation name is intentionally NOT "category" — that name collides
      * with the legacy `category` string column (Eloquent lets an
