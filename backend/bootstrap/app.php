@@ -15,6 +15,18 @@ return Application::configure(basePath: dirname(__DIR__))
         ->withMiddleware(function (Middleware $middleware): void {
             $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/login');
 
+            // Railway terminates TLS and proxies every request through its own edge,
+            // so the app has no way to see the real client IP unless it trusts the
+            // X-Forwarded-* headers from that edge. Without this, $request->ip() (used
+            // by the Phase 10 login/register rate limiters and by any future IP-based
+            // logic) returns Railway's internal proxy address instead of the real
+            // client IP — which is either unstable across requests (splitting one
+            // attacker's requests across many "IPs", defeating the limiter) or, worse,
+            // identical for every visitor (merging all users into one shared bucket).
+            // Trusting all proxies is the standard posture here since Railway's edge
+            // IS the trust boundary — nothing sits between it and the internet.
+            $middleware->trustProxies(at: '*');
+
             $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
 
             $middleware->alias([

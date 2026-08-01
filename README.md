@@ -595,6 +595,17 @@ No middleware anywhere set any hardening response headers. Added `app/Http/Middl
 
 A full CSP was deliberately not added — this is a JSON API with no server-rendered HTML views to constrain, and a hand-tuned CSP for an API-only backend has a poor risk/value ratio (easy to misconfigure, breaks nothing existing if omitted).
 
+### 4. Trust Railway's edge proxy (`bootstrap/app.php`) — found during production verification, not local testing
+
+This one wasn't caught by local `php artisan serve` testing — it only surfaced once the login rate limiter was verified **against the real Railway deployment**. Symptom: hammering `/api/login` with the same wrong-password email against production never returned `429`, and `X-RateLimit-Remaining` bounced non-monotonically between requests instead of counting down — both signs the `email+IP` limiter key was resolving to a *different* IP on different requests for the same real client.
+
+Root cause: Railway terminates TLS and proxies every request through its own edge, so `$request->ip()` was returning the internal proxy hop's address, not the real client IP — and apparently an unstable one across requests. The app had no `trustProxies()` configuration at all, so Laravel never looked at the `X-Forwarded-For`/`X-Forwarded-Proto` headers Railway sets. This silently broke two things at once:
+
+- The Phase 10 rate limiters (this section) — an attacker's requests could be spread across whatever the internal proxy-hop IP resolves to, defeating the per-IP bucket; worse, if that hop IP is *shared* by all traffic, it would incorrectly merge every real visitor into one bucket.
+- The `Strict-Transport-Security` header from section 3 — `$request->isSecure()` also depends on the trusted-proxy chain to read `X-Forwarded-Proto`; without it, Laravel only sees the plain-HTTP hop between Railway's edge and the app container, so the header was **silently never being sent** on production HTTPS traffic even though the condition looked correct locally.
+
+Fixed with `$middleware->trustProxies(at: '*')` in `bootstrap/app.php` — trusting all proxies is the right posture here since Railway's edge *is* the trust boundary (nothing else sits between it and the internet, unlike a self-hosted stack behind an unknown number of untrusted hops).
+
 ### Considered, not changed
 
 - **Sanctum token expiration** — `config/sanctum.php` has `'expiration' => null`, so issued tokens never expire except via explicit logout (`currentAccessToken()->delete()`). Evaluated and **left as-is**: adding an expiration is a genuine behavior change (users would get silently logged out) that wasn't requested and would need product-level UX (refresh flow, "session expired" messaging) to not regress the existing experience. Flagged here rather than silently implemented or silently dropped.
@@ -608,15 +619,24 @@ A full CSP was deliberately not added — this is a JSON API with no server-rend
 - **Admin-role enforcement** — `AdminMiddleware` correctly checks `$request->user()->is_admin` and returns 403 otherwise; applied consistently across all `/api/admin/*` routes.
 - **Mass-assignment safety on `is_admin`** — `User::$fillable` includes `is_admin`, but `RegisterRequest`/`UpdateProfileRequest` validation rules never expose it as an accepted field, so a user cannot self-promote via mass assignment. The only other `is_admin` reference in the codebase is a *query* (`CheckoutController.php`, finding admins to notify on low stock — a Phase 6 feature), not user input.
 
-### Verification performed (local SQLite + local dev server only)
+### Verification performed
+
+**Local (SQLite + `php artisan serve`):**
 
 - `php -l` clean on all new/changed backend files (`AppServiceProvider.php`, `routes/api.php`, `config/cors.php`, `app/Http/Middleware/SecurityHeaders.php`, `bootstrap/app.php`).
-- `php artisan test` — 2/2 passing, no regressions (run before and after the changes).
+- `php artisan test` — 2/2 passing, no regressions (run before and after every change in this phase, including the trust-proxies fix).
 - Manual curl testing against `php artisan serve`:
   - Rate limiting: 7 rapid `POST /api/login` attempts with the same wrong-password email → attempts 1–5 return `401`, attempts 6–7 return `429` with `X-RateLimit-Limit: 5`, `X-RateLimit-Remaining: 0`, and a `Retry-After` header. Confirmed a **different** email from the same IP (a real seeded user, correct password) is unaffected — still `200` — proving the limiter is keyed by `email+IP`, not IP alone. Same 5-per-minute → `429` pattern confirmed for `POST /api/register` (IP-keyed), with the 5 test accounts it created cleaned up afterward.
   - CORS: `OPTIONS /api/login` preflight with `Origin: http://localhost:3000` (the configured default) returns a matching `Access-Control-Allow-Origin`; the same preflight with `Origin: https://evil.com` returns an `Access-Control-Allow-Origin` that does **not** match the requesting origin — real browsers block the follow-up request in this case (CORS is a browser-enforced boundary; curl itself doesn't enforce it, which is why the mismatch, not an outright missing header, is the correct signal to check for).
   - Security headers: confirmed `X-Content-Type-Options`, `X-Frame-Options`, and `Referrer-Policy` present on both a plain `GET /up` and a real `POST /api/login` response.
+  - After adding the trust-proxies fix (§4 above): re-sent the same 6-attempt burst with a spoofed `X-Forwarded-For: 203.0.113.5` header on every request — attempt 6 correctly returned `429`; a follow-up request with a *different* `X-Forwarded-For` value returned `401` (its own bucket), confirming the limiter now keys off the forwarded client IP rather than the raw socket peer.
 - No frontend changes in this phase — `npm run build` not re-run (nothing in `frontend/` was touched).
+
+**Production (`https://charpsdev-production.up.railway.app`, after deploying):**
+
+- `/up` → `200`; `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` all present on real responses.
+- Initial post-deploy rate-limit check *failed* to trigger `429` after 6 attempts and showed a non-monotonic `X-RateLimit-Remaining` — this is exactly what led to discovering and fixing §4 above. After redeploying with the fix, `Strict-Transport-Security` also began appearing on responses (previously silently absent in production despite the code looking correct — same root cause, see §4).
+- A legitimate login (`test@example.com` / `password`) continued to return `200` throughout all rate-limit testing on a different account, confirming the limiter never affects unrelated users.
 
 ### Deployment status
 
