@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Bolt, CreditCard, Globe2, Menu, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
+import { ArrowRight, BadgeCheck, Bolt, CreditCard, Globe2, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
+import LandingNav from "@/components/layout/LandingNav";
 
 const services = [
   ["Virtual Numbers", "Reliable numbers for supported services", Globe2],
@@ -12,17 +13,7 @@ export default function HomePage() {
   return (
     <main className="landing">
       <div className="landing-grid" />
-      <nav className="landing-nav">
-        <Link href="/" className="brand"><span>Charps</span>Dev</Link>
-        <div className="nav-links">
-          <a href="#services">Services</a><a href="#how-it-works">How It Works</a><a href="#why-us">Why CharpsDev</a>
-        </div>
-        <div className="nav-actions">
-          <Link className="nav-login" href="/login">Log in</Link>
-          <Link className="nav-cta" href="/register">Get Started <ArrowRight size={16}/></Link>
-        </div>
-        <Menu className="mobile-menu" size={24}/>
-      </nav>
+      <LandingNav />
 
       <section className="hero">
         <div className="eyebrow"><Sparkles size={14}/> TRUSTED DIGITAL SERVICES, ALL IN ONE PLACE</div>
