@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/StateBlock";
 import { useInitializePaymentMutation, useWalletQuery, useWalletTransactionsQuery } from "@/hooks/queries/useWalletQueries";
 import { extractErrorMessage } from "@/lib/api";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, splitCurrencyParts } from "@/lib/format";
 
 function statusVariant(status: string) {
   const normalized = status?.toLowerCase();
@@ -48,22 +48,29 @@ export default function WalletPage() {
   };
 
   const rows = transactions.data?.data || [];
+  const balanceParts = splitCurrencyParts(wallet.data.balance, wallet.data.currency);
 
   return (
     <section className="space-y-6">
       <div>
-        <h1 className="font-heading text-3xl font-bold">Wallet</h1>
-        <p className="mt-2 text-muted-foreground">Manage your balance and fund your wallet.</p>
+        <h1 className="font-heading text-2xl font-bold md:text-3xl">Wallet</h1>
+        <p className="mt-1.5 text-sm font-normal text-muted-foreground/80">Manage your balance and fund your wallet.</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardContent className="flex items-center gap-4">
-            <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <WalletIcon className="size-6" aria-hidden="true" />
+        {/* Balance card — mirrors the dashboard's wallet card: larger icon,
+            more internal padding, vertically centered content, and the
+            currency symbol de-emphasized next to a larger, bolder amount. */}
+        <Card className="transition-shadow hover:shadow-md">
+          <CardContent className="flex items-center gap-4 py-2">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <WalletIcon className="size-7" aria-hidden="true" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Current balance</p>
-              <p className="mt-1 text-3xl font-bold">{formatCurrency(wallet.data.balance, wallet.data.currency)}</p>
+              <p className="mt-1.5 font-heading font-bold tracking-tight">
+                <span className="text-lg align-top text-muted-foreground">{balanceParts.symbol}</span>
+                <span className="text-3xl">{balanceParts.amount}</span>
+              </p>
             </div>
           </CardContent>
         </Card>
