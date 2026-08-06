@@ -1,0 +1,21 @@
+# Node
+node_modules/
+
+# Never commit signing material
+android/keystore.properties
+android/app/release.keystore
+*.jks
+*.keystore
+
+# Android build output
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/captures/
+android/.idea/
+android/*.iml
+android/app/*.iml
+
+# Capacitor placeholder web assets copied into the native project at sync time
+android/app/src/main/assets/public/

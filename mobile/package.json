@@ -1,0 +1,24 @@
+{
+  "name": "charpsdev-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CharpsDev Android app shell (Capacitor wrapper around the live Next.js/Vercel site)",
+  "scripts": {
+    "sync": "npx cap sync android",
+    "open:android": "npx cap open android",
+    "build:android": "npx cap sync android && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "typescript": "^7.0.2"
+  }
+}
