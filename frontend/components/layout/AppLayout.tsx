@@ -43,18 +43,40 @@ const navItems = [
   { href: "/profile", label: "Profile", icon: UserIcon },
 ];
 
+/**
+ * The mobile bottom tab bar (BottomNav) already covers Dashboard, Services,
+ * Orders, Wallet, and Profile, so the mobile drawer hides those to avoid
+ * duplicating the same destinations in two places at once. Dashboard/Services
+ * intentionally stay in the drawer too (they're "primary" sections users may
+ * still expect at the top of a full nav list). Desktop has no bottom bar, so
+ * its sidebar always renders the complete, unfiltered navItems.
+ */
+const MOBILE_DRAWER_HIDDEN_HREFS = new Set(["/wallet", "/orders", "/profile"]);
+
 function initialsOf(name: string | undefined) {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({
+  onNavigate,
+  variant = "desktop",
+}: {
+  onNavigate?: () => void;
+  /** "mobile" hides destinations already reachable via BottomNav (Orders/Wallet/Profile) to avoid duplication. */
+  variant?: "desktop" | "mobile";
+}) {
   const pathname = usePathname();
   const { user, logout, isLoggingOut } = useAuth();
   const unread = useUnreadCountQuery();
   const cart = useCartQuery();
   const cartCount = cart.data?.data.length ?? 0;
+
+  const items =
+    variant === "mobile"
+      ? navItems.filter((item) => !MOBILE_DRAWER_HIDDEN_HREFS.has(item.href))
+      : navItems;
 
   return (
     <div className="flex h-full flex-col">
@@ -65,8 +87,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
 
-      <nav id="primary-navigation" className="flex-1 space-y-1 px-3">
-        {navItems.map((item) => {
+      <nav id="primary-navigation" className="flex-1 space-y-2 px-3">
+        {items.map((item) => {
           const active = pathname === item.href;
           const Icon = item.icon;
           const badgeCount =
@@ -78,9 +100,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                "flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-[color-mix(in_oklch,var(--color-primary),black_14%)] text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
@@ -102,9 +124,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             href="/admin/dashboard"
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
               pathname?.startsWith("/admin")
-                ? "bg-primary text-primary-foreground"
+                ? "bg-[color-mix(in_oklch,var(--color-primary),black_14%)] text-primary-foreground"
                 : "text-primary hover:bg-primary/10",
             )}
           >
@@ -114,7 +136,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         ) : null}
       </nav>
 
-      <div className="m-3 rounded-xl border border-border bg-card p-3">
+      <div className="m-3 rounded-xl border border-border bg-card p-4">
         <div className="flex items-center gap-3">
           <Avatar>
             <AvatarFallback>{initialsOf(user?.name)}</AvatarFallback>
@@ -125,9 +147,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         </div>
         <Button
-          variant="outline"
           size="sm"
-          className="mt-3 w-full text-destructive hover:bg-destructive/10"
+          className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90"
           disabled={isLoggingOut}
           onClick={() => void logout()}
         >
@@ -200,19 +221,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               aria-label="Close navigation"
-              className="absolute inset-0 bg-foreground/40"
+              className="absolute inset-0 bg-foreground/55"
               onClick={closeMobileSidebar}
             />
-            <div className="relative z-10 h-full w-72 max-w-[80vw] border-r border-border bg-card shadow-xl">
+            <div className="relative z-10 h-full w-[78vw] max-w-80 border-r border-border bg-card shadow-xl">
               <button
                 type="button"
                 aria-label="Close navigation"
-                className="absolute right-3 top-4 rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+                className="absolute right-2 top-2 flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
                 onClick={closeMobileSidebar}
               >
                 <XIcon className="size-5" aria-hidden="true" />
               </button>
-              <SidebarContent onNavigate={closeMobileSidebar} />
+              <SidebarContent onNavigate={closeMobileSidebar} variant="mobile" />
             </div>
           </div>
         ) : null}
