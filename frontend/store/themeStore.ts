@@ -21,11 +21,25 @@ function getSystemTheme(): ResolvedTheme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+/**
+ * Mirrors `--color-background` for `.light`/`.dark` in app/globals.css.
+ * Keeping the Android/Chrome status bar (`<meta name="theme-color">`) in
+ * sync with the ACTUAL resolved theme, not just the OS `prefers-color-scheme`
+ * media query, is what fixes the "white status bar on a dark-themed app"
+ * mismatch — see the comment in app/layout.tsx for the full rationale.
+ */
+const THEME_COLORS: Record<ResolvedTheme, string> = {
+  light: "#f8fafc",
+  dark: "#0b1120",
+};
+
 function applyThemeClass(resolved: ResolvedTheme) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   root.classList.toggle("dark", resolved === "dark");
   root.style.colorScheme = resolved;
+  const meta = document.getElementById("theme-color-meta");
+  if (meta) meta.setAttribute("content", THEME_COLORS[resolved]);
 }
 
 export const useThemeStore = create<ThemeState>()(

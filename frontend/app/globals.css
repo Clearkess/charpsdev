@@ -87,25 +87,37 @@
   color-scheme: dark;
 }
 
-* {
-  box-sizing: border-box;
-}
+/*
+ * These base resets must live inside Tailwind's `base` layer, not as bare
+ * unlayered rules. Cascade layers always rank unlayered rules ABOVE every
+ * `@layer`, regardless of selector specificity — so a bare `a { color:
+ * inherit }` here was silently beating utility classes like `.text-primary`
+ * on <a> elements everywhere in the app (e.g. the bottom nav's active tab
+ * rendered navy instead of gold, no matter how the class was set). Wrapping
+ * these in `@layer base` puts them back below `@layer utilities`, matching
+ * how Tailwind's own preflight resets behave.
+ */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  background: var(--color-background);
-  color: var(--color-foreground);
-  font-family: var(--font-sans);
-}
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 
-button, input, select, textarea {
-  font: inherit;
+  button, input, select, textarea {
+    font: inherit;
+  }
 }
 
 @keyframes skeleton-pulse {

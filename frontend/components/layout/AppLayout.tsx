@@ -244,7 +244,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <div className="flex min-h-screen flex-col">
           {/* Topbar */}
-          <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 md:px-8">
+          <header className="flex items-center gap-3 border-b border-border bg-card px-5 py-3 md:px-8">
             <button
               type="button"
               aria-label="Open navigation"
@@ -256,16 +256,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </button>
             <BrandMark className="h-7 w-auto md:hidden" />
             <TopbarSearch />
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex items-center gap-4">
               {user?.is_admin ? <Badge variant="secondary">Admin</Badge> : null}
               <ThemeToggle />
-              <Avatar size="sm">
+              <Avatar size="sm" className="shrink-0">
                 <AvatarFallback>{initialsOf(user?.name)}</AvatarFallback>
               </Avatar>
             </div>
           </header>
 
-          <main id="main-content" className="flex-1 p-4 pb-24 md:p-8 md:pb-8">
+          <main id="main-content" className="flex-1 px-5 py-4 pb-24 md:p-8 md:pb-8">
             {children}
           </main>
         </div>
