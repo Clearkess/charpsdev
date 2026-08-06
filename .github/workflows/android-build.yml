@@ -38,18 +38,11 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          # capacitor-android (Capacitor 8) is compiled with Java 21 source/
-          # target compatibility. Building against JDK 17 fails with:
-          #   error: invalid source release: 21
-          # This matches the JDK 21 used to verify this build locally.
           java-version: "21"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          # Capacitor 8's CLI requires Node >=22 ("npx cap sync android" fails
-          # fast with `[fatal] The Capacitor CLI requires NodeJS >=22.0.0` on
-          # Node 20, which is what surfaced this requirement in CI.
           node-version: "22"
           cache: npm
           cache-dependency-path: mobile/package-lock.json
