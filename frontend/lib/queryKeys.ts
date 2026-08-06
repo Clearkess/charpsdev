@@ -29,4 +29,5 @@ export const queryKeys = {
   virtualNumberCountries: (provider: string) => ["virtual-numbers", provider, "countries"] as const,
   virtualNumberServices: (provider: string, country: string) => ["virtual-numbers", provider, country, "services"] as const,
   virtualNumberOrders: ["virtual-numbers", "orders"] as const,
+  publicSettings: ["settings", "public"] as const,
 };

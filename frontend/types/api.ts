@@ -413,3 +413,9 @@ export interface ReviewsResponse {
   /** The authenticated user's own review for this service, if any — lets the UI pre-fill/label the form as "Edit your review" instead of "Write a review". */
   my_review: Review | null;
 }
+
+/** Response shape of the unauthenticated GET /settings/public allowlist (see backend PublicSettingController). */
+export interface PublicSettings {
+  site_name: string;
+  support_email: string | null;
+}

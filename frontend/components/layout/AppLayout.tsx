@@ -7,11 +7,13 @@ import {
   BellIcon,
   ClipboardListIcon,
   LayoutDashboardIcon,
+  LifeBuoyIcon,
   LogOutIcon,
   MenuIcon,
   PackageIcon,
   PhoneIcon,
   SearchIcon,
+  SettingsIcon,
   ShieldCheckIcon,
   ShoppingCartIcon,
   UserIcon,
@@ -41,6 +43,8 @@ const navItems = [
   { href: "/orders", label: "Orders", icon: ClipboardListIcon },
   { href: "/notifications", label: "Notifications", icon: BellIcon },
   { href: "/profile", label: "Profile", icon: UserIcon },
+  { href: "/settings", label: "Settings", icon: SettingsIcon },
+  { href: "/support", label: "Support", icon: LifeBuoyIcon },
 ];
 
 /**

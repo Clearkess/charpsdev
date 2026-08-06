@@ -58,7 +58,7 @@ function ChangePasswordCard() {
   };
 
   return (
-    <Card>
+    <Card id="change-password">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <KeyRoundIcon className="size-4" aria-hidden="true" />

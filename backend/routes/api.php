@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\VirtualNumberController;
+use App\Http\Controllers\Api\PublicSettingController;
 
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\Admin\AdminAnalyticsController;
@@ -77,6 +78,10 @@ Route::post('/reset-password', function (Request $request) {
 
 Route::get('/payment/callback', [PaymentController::class, 'callback']);
 Route::post('/payment/webhook', [PaymentController::class, 'webhook']);
+
+// Public (unauthenticated) allowlisted settings, e.g. the Support page's
+// contact email — see PublicSettingController for the exact key allowlist.
+Route::get('/settings/public', [PublicSettingController::class, 'index']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
