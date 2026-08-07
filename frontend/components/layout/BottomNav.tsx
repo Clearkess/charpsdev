@@ -36,6 +36,19 @@ export default function BottomNav() {
             <li key={item.href}>
               <Link
                 href={item.href}
+                // Disable Next.js's automatic viewport-prefetch for these
+                // protected-route tabs. On a cold Android WebView launch the
+                // auth cookie (written client-side in authStore's
+                // onRehydrateStorage) can commit slightly *after* this bar
+                // renders — an automatic prefetch fired in that window hits
+                // proxy.ts cookie-less, gets redirected to /login, and Next's
+                // router cache can then serve that stale redirect on the
+                // real tap. Prefetch=false forces every tap to be a fresh
+                // navigation/middleware check instead of relying on a cache
+                // primed before the cookie existed. See also
+                // MainActivity.java's CookieManager fix for the other half
+                // of this race.
+                prefetch={false}
                 className={cn(
                   "flex flex-col items-center gap-0.5 py-2 text-[0.65rem] font-medium transition-colors",
                   active ? "text-primary" : "text-muted-foreground hover:text-foreground",

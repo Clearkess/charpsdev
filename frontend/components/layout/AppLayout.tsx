@@ -103,6 +103,11 @@ function SidebarContent({
               key={item.href}
               href={item.href}
               onClick={onNavigate}
+              // See BottomNav.tsx for why every protected-route nav Link
+              // disables prefetch: avoids priming Next's router/prefetch
+              // cache with a proxy.ts redirect-to-login response from a
+              // pre-cookie-write prefetch on a cold Android WebView launch.
+              prefetch={false}
               className={cn(
                 "flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active
@@ -127,6 +132,7 @@ function SidebarContent({
           <Link
             href="/admin/dashboard"
             onClick={onNavigate}
+            prefetch={false}
             className={cn(
               "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
               pathname?.startsWith("/admin")

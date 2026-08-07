@@ -42,7 +42,7 @@ export default function ErrorScreen({
                 Try again
               </Button>
             ) : null}
-            <Button variant="outline" render={<Link href="/dashboard">Go to dashboard</Link>} />
+            <Button variant="outline" render={<Link href="/dashboard" prefetch={false}>Go to dashboard</Link>} />
           </div>
         </CardContent>
       </Card>

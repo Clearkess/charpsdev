@@ -189,7 +189,7 @@ export default function OrdersPage() {
           description="Create your first order above, or browse the marketplace to see what's available."
           icon={ShoppingCartIcon}
           action={
-            <Button render={<Link href="/services" />} variant="outline" size="sm">
+            <Button render={<Link href="/services" prefetch={false} />} variant="outline" size="sm">
               Browse services
             </Button>
           }

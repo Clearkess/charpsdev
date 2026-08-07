@@ -106,11 +106,11 @@ export default function SupportPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" render={<Link href="/orders" />}>
+            <Button variant="outline" size="sm" render={<Link href="/orders" prefetch={false} />}>
               <ClipboardListIcon data-icon="inline-start" aria-hidden="true" />
               Track an order
             </Button>
-            <Button variant="outline" size="sm" render={<Link href="/wallet" />}>
+            <Button variant="outline" size="sm" render={<Link href="/wallet" prefetch={false} />}>
               <WalletIcon data-icon="inline-start" aria-hidden="true" />
               Wallet & payments
             </Button>

@@ -70,11 +70,11 @@ export default function SettingsPage() {
             Update your name, email, or password from your profile page.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" render={<Link href="/profile" />}>
+            <Button variant="outline" size="sm" render={<Link href="/profile" prefetch={false} />}>
               <UserIcon data-icon="inline-start" aria-hidden="true" />
               Go to profile
             </Button>
-            <Button variant="outline" size="sm" render={<Link href="/profile#change-password" />}>
+            <Button variant="outline" size="sm" render={<Link href="/profile#change-password" prefetch={false} />}>
               <KeyRoundIcon data-icon="inline-start" aria-hidden="true" />
               Change password
             </Button>

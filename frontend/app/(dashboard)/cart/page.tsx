@@ -110,7 +110,7 @@ export default function CartPage() {
           description="Browse the marketplace and add a service or product to get started."
           icon={ShoppingCartIcon}
           action={
-            <Button render={<Link href="/services" />} variant="outline" size="sm">
+            <Button render={<Link href="/services" prefetch={false} />} variant="outline" size="sm">
               Browse services
             </Button>
           }

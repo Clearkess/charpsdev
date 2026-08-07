@@ -114,7 +114,7 @@ export default function WalletPage() {
               description="Fund your wallet above to see your transaction history appear here."
               icon={ReceiptTextIcon}
               action={
-                <Button render={<Link href="/services" />} variant="outline" size="sm">
+                <Button render={<Link href="/services" prefetch={false} />} variant="outline" size="sm">
                   Browse services
                 </Button>
               }
