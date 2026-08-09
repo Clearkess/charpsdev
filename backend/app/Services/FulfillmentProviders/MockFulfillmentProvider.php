@@ -101,4 +101,24 @@ class MockFulfillmentProvider implements FulfillmentProviderInterface
 
         return ['status' => 'completed', 'raw' => ['reference' => $reference]];
     }
+
+    public function ping(): array
+    {
+        $mode = $this->mode();
+
+        // A "connectivity" check is only meaningfully unhealthy for the
+        // modes that represent a down/unreachable upstream. The
+        // NonRetryable business-error modes (insufficient_balance, etc.)
+        // are about a *specific transaction*, not connectivity — a mock
+        // "Test connection" click reports those as reachable.
+        $unreachable = in_array($mode, ['timeout', 'connection_failure', 'http_503'], true);
+
+        return [
+            'ok' => ! $unreachable,
+            'message' => $unreachable
+                ? "Mock provider simulated a {$mode} while pinging."
+                : 'Mock provider reachable (mode: '.$mode.').',
+            'raw' => ['mode' => $mode],
+        ];
+    }
 }

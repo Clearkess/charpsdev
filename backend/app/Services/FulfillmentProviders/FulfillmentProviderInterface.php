@@ -56,4 +56,22 @@ interface FulfillmentProviderInterface
      *                                           'completed', 'pending', 'failed', 'not_found'.
      */
     public function checkStatus(string $reference): array;
+
+    /**
+     * Provider Router (Option B) — a lightweight connectivity/credential
+     * check with no side effects on the upstream (no order is placed, no
+     * balance is spent), used by the Admin API's "Test connection" button
+     * and by ProviderHealthService's synthetic health-check endpoint.
+     * Adapters for real providers should hit whatever the cheapest
+     * authenticated read is (e.g. a balance/wallet-lookup endpoint);
+     * MockFulfillmentProvider derives a synthetic result from the same
+     * api_key-driven mode used by fulfill().
+     *
+     * Must NOT throw — connectivity failures are reported via `ok: false`,
+     * not exceptions, since callers (Admin API, health checks) always need
+     * a normal response to show the admin, not a 500.
+     *
+     * @return array{ok: bool, message: string, raw: array}
+     */
+    public function ping(): array;
 }

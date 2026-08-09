@@ -1,39 +1,38 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
-use Illuminate\Auth\Events\PasswordReset;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
-
+use App\Http\Controllers\Api\Admin\AdminAnalyticsController;
+use App\Http\Controllers\Api\Admin\AdminController;
+use App\Http\Controllers\Api\Admin\AdminOrderController;
+use App\Http\Controllers\Api\Admin\AdminUserController;
+use App\Http\Controllers\Api\Admin\AdminWalletController;
+use App\Http\Controllers\Api\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Api\Admin\CouponController as AdminCouponController;
+use App\Http\Controllers\Api\Admin\ProviderController as AdminProviderController;
+use App\Http\Controllers\Api\Admin\ServiceController as AdminServiceController;
+use App\Http\Controllers\Api\Admin\ServiceProviderRouteController as AdminServiceProviderRouteController;
+use App\Http\Controllers\Api\Admin\SettingController as AdminSettingController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\ProfileController;
-use App\Http\Controllers\Api\ServiceController;
-use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CartController;
+use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CheckoutController;
-use App\Http\Controllers\Api\WalletController;
+use App\Http\Controllers\Api\CouponController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentController;
-use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\Api\PushSubscriptionController;
-use App\Http\Controllers\Api\CouponController;
-use App\Http\Controllers\Api\ReviewController;
-use App\Http\Controllers\Api\VirtualNumberController;
+use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PublicSettingController;
-
-use App\Http\Controllers\Api\Admin\AdminController;
-use App\Http\Controllers\Api\Admin\AdminAnalyticsController;
-use App\Http\Controllers\Api\Admin\AdminUserController;
-use App\Http\Controllers\Api\Admin\AdminOrderController;
-use App\Http\Controllers\Api\Admin\AdminWalletController;
-use App\Http\Controllers\Api\Admin\ServiceController as AdminServiceController;
-use App\Http\Controllers\Api\Admin\CategoryController as AdminCategoryController;
-use App\Http\Controllers\Api\Admin\ProviderController as AdminProviderController;
-use App\Http\Controllers\Api\Admin\CouponController as AdminCouponController;
-use App\Http\Controllers\Api\Admin\SettingController as AdminSettingController;
+use App\Http\Controllers\Api\PushSubscriptionController;
+use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\VirtualNumberController;
+use App\Http\Controllers\Api\WalletController;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Foundation\Auth\EmailVerificationRequest;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:register');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
@@ -184,9 +183,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/wallets/{user}/debit', [AdminWalletController::class, 'debit']);
 
         Route::get('/providers', [AdminProviderController::class, 'index']);
+        Route::get('/providers/health-summary', [AdminProviderController::class, 'healthSummary']);
         Route::post('/providers', [AdminProviderController::class, 'store']);
         Route::put('/providers/{provider}', [AdminProviderController::class, 'update']);
         Route::delete('/providers/{provider}', [AdminProviderController::class, 'destroy']);
+        Route::post('/providers/{provider}/test', [AdminProviderController::class, 'test']);
+        Route::post('/providers/{provider}/health-check', [AdminProviderController::class, 'healthCheck']);
+        Route::get('/providers/{provider}/health', [AdminProviderController::class, 'health']);
+        Route::get('/providers/{provider}/services', [AdminServiceProviderRouteController::class, 'servicesForProvider']);
+
+        // Provider Router (Option B): per-service routing chain (the
+        // "Routing editor" UI's backing endpoints). Deliberately nested
+        // under /admin/services/{service}/providers rather than a
+        // top-level resource — every one of these operations is always
+        // scoped to exactly one service's chain.
+        Route::get('/services/{service}/providers', [AdminServiceProviderRouteController::class, 'index']);
+        Route::post('/services/{service}/providers', [AdminServiceProviderRouteController::class, 'store']);
+        Route::put('/services/{service}/providers/{route}', [AdminServiceProviderRouteController::class, 'update']);
+        Route::delete('/services/{service}/providers/{route}', [AdminServiceProviderRouteController::class, 'destroy']);
+        Route::post('/services/{service}/providers/reorder', [AdminServiceProviderRouteController::class, 'reorder']);
 
         Route::get('/coupons', [AdminCouponController::class, 'index']);
         Route::post('/coupons', [AdminCouponController::class, 'store']);

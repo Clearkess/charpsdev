@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Provider;
 use App\Models\ProviderHealthCheck;
+use App\Services\FulfillmentProviders\FulfillmentAdapterResolver;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -80,6 +81,30 @@ class ProviderHealthService
         $this->logCheck($provider, $newStatus, $responseTimeMs, $httpStatus, $errorCode, $errorMessage);
 
         return $provider->refresh();
+    }
+
+    /**
+     * Provider Router (Option B) — active monitoring: calls the resolved
+     * adapter's no-side-effect ping() and records the result exactly like
+     * a passive fulfil-attempt outcome (same recordSuccess()/
+     * recordFailure() escalation rules), so an admin's "Health check" click
+     * on the Providers page has the exact same effect on health_status/
+     * cooldown as a real order would. Returns the raw ping() result plus
+     * the Provider AFTER the resulting state change, for the API response.
+     *
+     * @return array{ping: array{ok: bool, message: string, raw: array}, provider: Provider}
+     */
+    public function runSyntheticCheck(Provider $provider): array
+    {
+        $startedAt = microtime(true);
+        $ping = FulfillmentAdapterResolver::resolve($provider)->ping();
+        $responseMs = (int) round((microtime(true) - $startedAt) * 1000);
+
+        $provider = $ping['ok']
+            ? $this->recordSuccess($provider, $responseMs)
+            : $this->recordFailure($provider, 'ping_failed', $ping['message'], null, $responseMs);
+
+        return ['ping' => $ping, 'provider' => $provider];
     }
 
     private function logCheck(

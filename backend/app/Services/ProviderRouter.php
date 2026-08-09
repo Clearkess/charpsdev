@@ -6,10 +6,10 @@ use App\Models\Order;
 use App\Models\Provider;
 use App\Models\Service;
 use App\Models\ServiceProviderRoute;
+use App\Services\FulfillmentProviders\FulfillmentAdapterResolver;
 use App\Services\FulfillmentProviders\FulfillmentErrorType;
 use App\Services\FulfillmentProviders\FulfillmentException;
 use App\Services\FulfillmentProviders\FulfillmentProviderInterface;
-use App\Services\FulfillmentProviders\MockFulfillmentProvider;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -30,17 +30,6 @@ use Illuminate\Support\Facades\Log;
  */
 class ProviderRouter
 {
-    /**
-     * Real per-slug adapters go here as they're built (mirrors
-     * VirtualNumberService::ADAPTERS) — e.g. 'vtpass' =>
-     * VtpassProvider::class. Empty today: no real fulfilment-provider
-     * credentials exist anywhere in this codebase yet (confirmed via
-     * .env.example — only Paystack keys). Every provider row falls back to
-     * MockFulfillmentProvider below until a real adapter is registered
-     * for its slug.
-     */
-    private const ADAPTERS = [];
-
     public function __construct(private readonly ProviderHealthService $health) {}
 
     /**
@@ -252,10 +241,6 @@ class ProviderRouter
 
     private function resolveAdapter(Provider $provider): FulfillmentProviderInterface
     {
-        $adapterClass = self::ADAPTERS[$provider->slug] ?? MockFulfillmentProvider::class;
-
-        return blank($provider->base_url)
-            ? new $adapterClass($provider->api_key)
-            : new $adapterClass($provider->api_key, rtrim($provider->base_url, '/'));
+        return FulfillmentAdapterResolver::resolve($provider);
     }
 }
