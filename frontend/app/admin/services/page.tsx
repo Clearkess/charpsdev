@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
+import { RouteIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
@@ -128,6 +130,13 @@ export default function AdminServicesPage() {
           const isDeleting = deleteService.isPending && deleteService.variables === service.id;
           return (
             <div className="flex gap-2">
+              <Link
+                href={`/admin/services/${service.id}/routing`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                <RouteIcon data-icon="inline-start" aria-hidden="true" />
+                Routing
+              </Link>
               <Button size="sm" variant="outline" disabled={isBusy} onClick={() => void toggleActive(service)}>
                 {isBusy ? "Working..." : service.active === false ? "Activate" : "Deactivate"}
               </Button>

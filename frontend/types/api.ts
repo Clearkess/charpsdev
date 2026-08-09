@@ -273,6 +273,11 @@ export interface AnalyticsOverview {
  * browser — only a masked hint and a boolean flag so the admin UI can show
  * "a key is set" without ever exposing the plaintext credential.
  */
+/** Provider Router (Option A/B): health_status lifecycle — see backend
+ * Provider model / ProviderHealthService doc comments. 'degraded' is still
+ * routable (once its cooldown expires); only 'offline' is excluded. */
+export type ProviderHealthStatus = "healthy" | "degraded" | "offline";
+
 export interface Provider {
   id: number;
   name: string;
@@ -282,8 +287,70 @@ export interface Provider {
   has_api_key: boolean;
   active: boolean;
   services_count?: number;
+  /** Provider Router (Option B) fields — see ProviderController::present(). */
+  category?: string | null;
+  priority?: number;
+  is_primary?: boolean;
+  is_backup?: boolean;
+  health_status?: ProviderHealthStatus;
+  is_routable?: boolean;
+  is_in_cooldown?: boolean;
+  cooldown_until?: string | null;
+  failure_count?: number;
+  success_count?: number;
+  /** Percentage 0-100, or null when there have been no attempts yet. */
+  success_rate?: number | null;
+  last_success_at?: string | null;
+  last_failure_at?: string | null;
+  last_health_check_at?: string | null;
+  timeout_seconds?: number | null;
+  /** True once a real (non-mock) adapter is registered for this provider's slug. */
+  is_real_adapter?: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+/** Provider Router (Option B): one health_checks history row from
+ * GET /admin/providers/{provider}/health. */
+export interface ProviderHealthCheck {
+  id: number;
+  provider_id: number;
+  status: ProviderHealthStatus;
+  response_time_ms?: number | null;
+  http_status?: number | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  checked_at: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Provider Router (Option B): one entry in a Service's ordered provider
+ * failover chain, as returned by /admin/services/{service}/providers*. */
+export interface ServiceProviderRoute {
+  id: number;
+  service_id: number;
+  provider_id: number;
+  provider: {
+    id: number;
+    name: string;
+    slug: string;
+    active: boolean;
+    health_status: ProviderHealthStatus;
+    is_routable: boolean;
+  } | null;
+  priority: number;
+  enabled: boolean;
+  /** Derived display-only role: position 1 = "primary", everything else = "backup". */
+  role: "primary" | "backup";
+  position: number;
+  provider_service_id?: string | null;
+  provider_cost?: number | string | null;
+  failure_count: number;
+  success_count: number;
+  success_rate: number | null;
+  last_success_at?: string | null;
+  last_failure_at?: string | null;
 }
 
 export type CouponType = "percentage" | "fixed";

@@ -11,18 +11,51 @@ import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/State
 import {
   useAdminProviderCreateMutation,
   useAdminProviderDeleteMutation,
+  useAdminProviderHealthCheckMutation,
+  useAdminProviderHealthSummaryQuery,
   useAdminProvidersQuery,
+  useAdminProviderTestMutation,
   useAdminProviderUpdateMutation,
 } from "@/hooks/queries/useAdminQueries";
 import { extractErrorMessage } from "@/lib/api";
 import { formatDate } from "@/lib/format";
-import type { Provider } from "@/types/api";
+import type { Provider, ProviderHealthStatus } from "@/types/api";
+
+/** Provider Router (Option B): badge styling for the three health states. */
+function healthBadgeVariant(status?: ProviderHealthStatus): "success" | "warning" | "destructive" | "muted" {
+  switch (status) {
+    case "healthy":
+      return "success";
+    case "degraded":
+      return "warning";
+    case "offline":
+      return "destructive";
+    default:
+      return "muted";
+  }
+}
+
+function healthLabel(status?: ProviderHealthStatus): string {
+  switch (status) {
+    case "healthy":
+      return "Healthy";
+    case "degraded":
+      return "Degraded";
+    case "offline":
+      return "Offline";
+    default:
+      return "Unknown";
+  }
+}
 
 export default function AdminProvidersPage() {
   const providers = useAdminProvidersQuery();
+  const healthSummary = useAdminProviderHealthSummaryQuery();
   const createProvider = useAdminProviderCreateMutation();
   const updateProvider = useAdminProviderUpdateMutation();
   const deleteProvider = useAdminProviderDeleteMutation();
+  const testProvider = useAdminProviderTestMutation();
+  const healthCheckProvider = useAdminProviderHealthCheckMutation();
 
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -106,6 +139,27 @@ export default function AdminProvidersPage() {
     }
   };
 
+  const onTest = async (provider: Provider) => {
+    setMessage(null);
+    try {
+      const result = await testProvider.mutateAsync(provider.id);
+      const adapterNote = result.is_real_adapter ? "" : " (mock adapter — no real credentials configured yet)";
+      setMessage(`${provider.name}: ${result.ok ? "reachable" : "unreachable"} — ${result.message}${adapterNote}`);
+    } catch (error) {
+      setMessage(extractErrorMessage(error, "Connection test failed."));
+    }
+  };
+
+  const onHealthCheck = async (provider: Provider) => {
+    setMessage(null);
+    try {
+      const result = await healthCheckProvider.mutateAsync(provider.id);
+      setMessage(result.message);
+    } catch (error) {
+      setMessage(extractErrorMessage(error, "Health check failed."));
+    }
+  };
+
   const columns = useMemo<ColumnDef<Provider, unknown>[]>(
     () => [
       {
@@ -131,7 +185,14 @@ export default function AdminProvidersPage() {
           return (
             <div>
               <div className="font-medium">{provider.name}</div>
-              <div className="text-xs text-muted-foreground">{provider.slug}</div>
+              <div className="text-xs text-muted-foreground">
+                {provider.slug}
+                {!provider.is_real_adapter ? (
+                  <span className="ml-1.5 text-warning" title="No real adapter registered for this provider slug — orders route through the mock adapter.">
+                    · mock adapter
+                  </span>
+                ) : null}
+              </div>
             </div>
           );
         },
@@ -155,6 +216,29 @@ export default function AdminProvidersPage() {
             {row.original.has_api_key ? row.original.api_key_masked ?? "••••" : "Not set"}
           </span>
         ),
+      },
+      {
+        id: "health",
+        header: "Health",
+        accessorFn: (row) => row.health_status ?? "",
+        cell: ({ row }) => {
+          const provider = row.original;
+          return (
+            <div className="space-y-0.5">
+              <Badge variant={healthBadgeVariant(provider.health_status)}>
+                {healthLabel(provider.health_status)}
+              </Badge>
+              {provider.success_rate !== null && provider.success_rate !== undefined ? (
+                <div className="text-xs text-muted-foreground">{provider.success_rate}% success</div>
+              ) : (
+                <div className="text-xs text-muted-foreground">No attempts yet</div>
+              )}
+              {provider.is_in_cooldown ? (
+                <div className="text-xs text-muted-foreground">Cooling down</div>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         id: "services",
@@ -186,6 +270,8 @@ export default function AdminProvidersPage() {
           const provider = row.original;
           const isBusy = updateProvider.isPending && updateProvider.variables?.providerId === provider.id;
           const isDeleting = deleteProvider.isPending && deleteProvider.variables === provider.id;
+          const isTesting = testProvider.isPending && testProvider.variables === provider.id;
+          const isChecking = healthCheckProvider.isPending && healthCheckProvider.variables === provider.id;
 
           if (editingId === provider.id) {
             return (
@@ -204,6 +290,12 @@ export default function AdminProvidersPage() {
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => startEdit(provider)}>
                 Edit
+              </Button>
+              <Button size="sm" variant="outline" disabled={isTesting} onClick={() => void onTest(provider)}>
+                {isTesting ? "Testing..." : "Test"}
+              </Button>
+              <Button size="sm" variant="outline" disabled={isChecking} onClick={() => void onHealthCheck(provider)}>
+                {isChecking ? "Checking..." : "Health check"}
               </Button>
               <Button size="sm" variant="outline" disabled={isBusy} onClick={() => void toggleActive(provider)}>
                 {isBusy ? "Working..." : provider.active ? "Deactivate" : "Activate"}
@@ -232,6 +324,10 @@ export default function AdminProvidersPage() {
       updateProvider.variables,
       deleteProvider.isPending,
       deleteProvider.variables,
+      testProvider.isPending,
+      testProvider.variables,
+      healthCheckProvider.isPending,
+      healthCheckProvider.variables,
     ],
   );
 
@@ -240,7 +336,37 @@ export default function AdminProvidersPage() {
       <h1 className="font-heading text-3xl font-bold">Admin · Providers</h1>
       <p className="text-sm text-muted-foreground">
         Upstream service providers used to fulfil orders. API keys are stored securely and only ever shown masked.
+        Per-service failover order is configured from each service&apos;s <span className="font-medium">Routing</span>{" "}
+        action on the Services page.
       </p>
+
+      {healthSummary.data ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Provider health</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="flex flex-wrap gap-6">
+              <div>
+                <dt className="text-xs text-muted-foreground">Providers</dt>
+                <dd className="text-2xl font-semibold">{healthSummary.data.total}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Healthy</dt>
+                <dd className="text-2xl font-semibold text-success">{healthSummary.data.healthy}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Degraded</dt>
+                <dd className="text-2xl font-semibold text-warning">{healthSummary.data.degraded}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Offline</dt>
+                <dd className="text-2xl font-semibold text-destructive">{healthSummary.data.offline}</dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -275,7 +401,7 @@ export default function AdminProvidersPage() {
       </Card>
 
       {providers.isPending ? (
-        <TableSkeleton rows={5} cols={6} />
+        <TableSkeleton rows={5} cols={7} />
       ) : providers.error ? (
         <ErrorBlock message={extractErrorMessage(providers.error, "Failed to load providers.")} />
       ) : !providers.data?.length ? (

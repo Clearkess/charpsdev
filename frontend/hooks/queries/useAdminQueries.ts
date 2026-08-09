@@ -15,7 +15,9 @@ import type {
   OrderStatus,
   PaginatedResponse,
   Provider,
+  ProviderHealthCheck,
   Service,
+  ServiceProviderRoute,
   Setting,
   SimpleMessageResponse,
   Transaction,
@@ -432,6 +434,193 @@ export function useAdminProviderDeleteMutation() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminProviders });
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Provider Router (Option B) — provider health + per-service routing  */
+/* ------------------------------------------------------------------ */
+
+export interface ProviderHealthSummary {
+  total: number;
+  healthy: number;
+  degraded: number;
+  offline: number;
+}
+
+/** Powers the Providers page's "Provider Health summary panel". */
+export function useAdminProviderHealthSummaryQuery() {
+  const isAdmin = useIsAdmin();
+
+  return useQuery({
+    queryKey: queryKeys.adminProviderHealthSummary,
+    queryFn: async () => {
+      const response = await api.get<{ success: boolean; data: ProviderHealthSummary }>(
+        "/admin/providers/health-summary",
+      );
+      return response.data.data;
+    },
+    enabled: isAdmin,
+  });
+}
+
+/**
+ * POST /admin/providers/{id}/test — read-only connectivity/credential
+ * check (adapter's ping()). Does NOT affect health_status/cooldown, so it
+ * intentionally does not invalidate adminProviders.
+ */
+export function useAdminProviderTestMutation() {
+  return useMutation({
+    mutationFn: async (providerId: number) => {
+      const response = await api.post<{
+        success: boolean;
+        data: { ok: boolean; message: string; is_real_adapter: boolean };
+      }>(`/admin/providers/${providerId}/test`);
+      return response.data.data;
+    },
+  });
+}
+
+/**
+ * POST /admin/providers/{id}/health-check — an active synthetic check that
+ * DOES affect health_status/cooldown/counters exactly like a real
+ * fulfilment attempt would, so this invalidates both the provider list and
+ * the health summary panel.
+ */
+export function useAdminProviderHealthCheckMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (providerId: number) => {
+      const response = await api.post<{ success: boolean; message: string; data: Provider }>(
+        `/admin/providers/${providerId}/health-check`,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminProviders });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminProviderHealthSummary });
+    },
+  });
+}
+
+/** GET /admin/providers/{id}/health — recent health-check history for a drill-down view. */
+export function useAdminProviderHealthQuery(providerId: number | null) {
+  const isAdmin = useIsAdmin();
+
+  return useQuery({
+    queryKey: queryKeys.adminProviderHealth(providerId ?? 0),
+    queryFn: async () => {
+      const response = await api.get<{
+        success: boolean;
+        data: { provider: Provider; checks: ProviderHealthCheck[] };
+      }>(`/admin/providers/${providerId}/health`);
+      return response.data.data;
+    },
+    enabled: isAdmin && providerId !== null,
+  });
+}
+
+/**
+ * GET /admin/services/{service}/providers — the per-service routing chain
+ * that backs the "Routing editor" UI, in ProviderRouter's exact try-order.
+ */
+export function useAdminServiceProvidersQuery(serviceId: number | null) {
+  const isAdmin = useIsAdmin();
+
+  return useQuery({
+    queryKey: queryKeys.adminServiceProviders(serviceId ?? 0),
+    queryFn: async () => {
+      const response = await api.get<{ success: boolean; data: ServiceProviderRoute[] }>(
+        `/admin/services/${serviceId}/providers`,
+      );
+      return response.data.data;
+    },
+    enabled: isAdmin && serviceId !== null,
+  });
+}
+
+export interface AdminServiceProviderRoutePayload {
+  provider_id: number;
+  priority?: number;
+  enabled?: boolean;
+  provider_service_id?: string | null;
+  provider_cost?: number | null;
+}
+
+/** POST /admin/services/{service}/providers — "+ Add provider". */
+export function useAdminServiceProviderCreateMutation(serviceId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: AdminServiceProviderRoutePayload) => {
+      const response = await api.post<{ success: boolean; message: string; data: ServiceProviderRoute }>(
+        `/admin/services/${serviceId}/providers`,
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminServiceProviders(serviceId) });
+    },
+  });
+}
+
+/** PUT /admin/services/{service}/providers/{route} — edit priority/enabled/etc. */
+export function useAdminServiceProviderUpdateMutation(serviceId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      routeId,
+      ...payload
+    }: Partial<Omit<AdminServiceProviderRoutePayload, "provider_id">> & { routeId: number }) => {
+      const response = await api.put<{ success: boolean; message: string; data: ServiceProviderRoute }>(
+        `/admin/services/${serviceId}/providers/${routeId}`,
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminServiceProviders(serviceId) });
+    },
+  });
+}
+
+/** DELETE /admin/services/{service}/providers/{route} — remove from chain. */
+export function useAdminServiceProviderDeleteMutation(serviceId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (routeId: number) => {
+      const response = await api.delete<SimpleMessageResponse>(`/admin/services/${serviceId}/providers/${routeId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminServiceProviders(serviceId) });
+    },
+  });
+}
+
+/**
+ * POST /admin/services/{service}/providers/reorder — the "Save routing" /
+ * drag-to-reorder action. Sends the full desired order as route IDs; the
+ * backend rewrites priority for every one of them in that order.
+ */
+export function useAdminServiceProviderReorderMutation(serviceId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (routeIds: number[]) => {
+      const response = await api.post<{ success: boolean; message: string; data: ServiceProviderRoute[] }>(
+        `/admin/services/${serviceId}/providers/reorder`,
+        { route_ids: routeIds },
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminServiceProviders(serviceId) });
     },
   });
 }
