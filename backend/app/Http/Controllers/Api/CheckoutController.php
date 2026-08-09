@@ -9,10 +9,11 @@ use App\Models\Notification;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Service;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
-use App\Models\WalletTransaction;
 use App\Services\NotificationService;
+use App\Services\OrderFulfillmentService;
 use App\Services\WebPushService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,11 +29,22 @@ class CheckoutController extends Controller
      *   Cart -> validate stock + balance -> debit wallet -> create order +
      *   order_items -> decrement stock -> clear cart -> notify user.
      *
-     * Everything happens inside one DB transaction with row locks on the
-     * wallet and each service, so concurrent checkouts / stock races can't
-     * result in a negative balance or oversold stock.
+     * Everything up to "clear cart" happens inside one DB transaction with
+     * row locks on the wallet and each service, so concurrent checkouts /
+     * stock races can't result in a negative balance or oversold stock.
+     *
+     * Provider Router (Option A): once that transaction commits, any
+     * service on this order that has an enabled provider-routing chain
+     * configured gets routed through ProviderRouter/OrderFulfillmentService
+     * for real upstream fulfilment (with automatic failover) — deliberately
+     * OUTSIDE the transaction above, since a routing attempt can make
+     * several slow third-party HTTP calls and must never hold the wallet
+     * row lock while doing so (same pattern as VirtualNumberService). A
+     * service with no routing configured is completely unaffected and
+     * keeps today's exact behaviour: order stays 'pending' for an admin to
+     * complete manually.
      */
-    public function store(Request $request, WebPushService $webPush, NotificationService $notifications)
+    public function store(Request $request, WebPushService $webPush, NotificationService $notifications, OrderFulfillmentService $fulfillment)
     {
         $userId = $request->user()->id;
 
@@ -66,10 +78,10 @@ class CheckoutController extends Controller
         $lowStockAlerts = [];
 
         try {
-            $order = DB::transaction(function () use ($cartItems, $userId, $request, $couponCode, &$lowStockAlerts) {
+            $order = DB::transaction(function () use ($cartItems, $userId, $couponCode, &$lowStockAlerts) {
                 // Lock every affected service row to prevent concurrent
                 // checkouts from overselling limited stock.
-                $lockedServices = \App\Models\Service::query()
+                $lockedServices = Service::query()
                     ->whereIn('id', $cartItems->pluck('service_id'))
                     ->lockForUpdate()
                     ->get()
@@ -117,7 +129,7 @@ class CheckoutController extends Controller
                     ]);
                 }
 
-                $reference = 'ORD-' . Str::upper(Str::random(10));
+                $reference = 'ORD-'.Str::upper(Str::random(10));
                 $firstItem = $cartItems->first();
                 $firstService = $lockedServices[$firstItem->service_id];
 
@@ -179,18 +191,18 @@ class CheckoutController extends Controller
                     'type' => 'debit',
                     'amount' => $total,
                     'reference' => $reference,
-                    'description' => 'Purchase: order ' . $reference . ' (' . $cartItems->count() . ' item' . ($cartItems->count() === 1 ? '' : 's') . ')',
+                    'description' => 'Purchase: order '.$reference.' ('.$cartItems->count().' item'.($cartItems->count() === 1 ? '' : 's').')',
                     'status' => 'success',
                 ]);
 
-                \App\Models\Transaction::create([
+                Transaction::create([
                     'user_id' => $userId,
                     'reference' => $reference,
                     'amount' => $total,
                     'status' => 'success',
                     'type' => 'purchase',
                     'gateway' => 'wallet',
-                    'description' => 'Purchase: order ' . $reference . ' (' . $cartItems->count() . ' item' . ($cartItems->count() === 1 ? '' : 's') . ')',
+                    'description' => 'Purchase: order '.$reference.' ('.$cartItems->count().' item'.($cartItems->count() === 1 ? '' : 's').')',
                 ]);
 
                 CartItem::where('user_id', $userId)->delete();
@@ -204,19 +216,20 @@ class CheckoutController extends Controller
             ], 422);
         }
 
-        $order = $order->fresh()->load(['items.service', 'user']);
+        $order = $fulfillment->fulfill($order->fresh());
+        $order->load(['items.service', 'user']);
 
         Notification::create([
             'user_id' => $userId,
             'title' => 'Order placed',
-            'message' => "Your order {$order->reference} for " . number_format((float) $order->total, 2) . ' has been placed and is being processed.',
+            'message' => "Your order {$order->reference} for ".number_format((float) $order->total, 2).' has been placed and is being processed.',
             'type' => 'order',
         ]);
 
         $webPush->sendToUser($order->user, [
             'title' => 'Order placed',
             'body' => "Order {$order->reference} has been placed.",
-            'url' => '/orders/' . $order->id,
+            'url' => '/orders/'.$order->id,
         ]);
 
         // Phase 6 (more notification triggers): admin-facing rather than

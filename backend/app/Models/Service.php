@@ -67,6 +67,17 @@ class Service extends Model
     }
 
     /**
+     * Provider Router (Option A): this service's ordered failover chain.
+     * Distinct from `provider()` above (the single legacy FK, kept for
+     * backward compat) — ProviderRouter reads exclusively from this
+     * relation, ordered by ServiceProviderRoute::priority.
+     */
+    public function providerRoutes(): HasMany
+    {
+        return $this->hasMany(ServiceProviderRoute::class);
+    }
+
+    /**
      * Null stock means unlimited / instant-digital-delivery (no cap to
      * enforce). Anything else is treated as a hard inventory count.
      */
