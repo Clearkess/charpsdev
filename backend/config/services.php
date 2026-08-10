@@ -28,7 +28,7 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-        'slack' => [
+    'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
@@ -37,6 +37,16 @@ return [
 
     'mailtrap' => [
         'token' => env('MAILTRAP_TOKEN'),
+    ],
+
+    /*
+    | Easylogs webhook signature secret only — NOT the API base_url/token,
+    | which live on the `providers` table row itself (via the Admin >
+    | Providers UI), same as every other Provider Router adapter, so
+    | EasylogsProvider never reads config() for its own credentials.
+    */
+    'easylogs' => [
+        'webhook_secret' => env('EASYLOGS_WEBHOOK_SECRET'),
     ],
 
 ];

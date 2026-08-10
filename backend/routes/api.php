@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\CouponController;
+use App\Http\Controllers\Api\EasylogsWebhookController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentController;
@@ -77,6 +78,7 @@ Route::post('/reset-password', function (Request $request) {
 
 Route::get('/payment/callback', [PaymentController::class, 'callback']);
 Route::post('/payment/webhook', [PaymentController::class, 'webhook']);
+Route::post('/webhooks/easylogs', [EasylogsWebhookController::class, 'handle']);
 
 // Public (unauthenticated) allowlisted settings, e.g. the Support page's
 // contact email — see PublicSettingController for the exact key allowlist.

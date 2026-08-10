@@ -13,15 +13,20 @@ use App\Models\Provider;
  * slug->class lookup or (worse) hard-coding MockFulfillmentProvider.
  *
  * Real per-slug adapters (VTpass, Flutterwave, ...) get registered here as
- * they're built — e.g. 'vtpass' => VtpassProvider::class. Empty today: no
- * real fulfilment-provider credentials exist anywhere in this codebase yet
- * (confirmed via .env.example — only Paystack keys). Every provider row
- * falls back to MockFulfillmentProvider until a real adapter is registered
- * for its slug.
+ * they're built — e.g. 'vtpass' => VtpassProvider::class. Every provider
+ * row falls back to MockFulfillmentProvider until a real adapter is
+ * registered for its slug.
+ *
+ * 'easylogs' => EasylogsProvider::class is the first real adapter (added
+ * once real credentials/API shape were supplied) — a Provider row must
+ * have slug='easylogs' for this mapping to take effect; any other slug
+ * still falls back to the mock.
  */
 class FulfillmentAdapterResolver
 {
-    private const ADAPTERS = [];
+    private const ADAPTERS = [
+        'easylogs' => EasylogsProvider::class,
+    ];
 
     public static function resolve(Provider $provider): FulfillmentProviderInterface
     {
