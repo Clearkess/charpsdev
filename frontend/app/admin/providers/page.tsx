@@ -9,6 +9,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/StateBlock";
 import {
+  useAdminEasylogsProductSyncMutation,
   useAdminProviderCreateMutation,
   useAdminProviderDeleteMutation,
   useAdminProviderHealthCheckMutation,
@@ -56,6 +57,7 @@ export default function AdminProvidersPage() {
   const deleteProvider = useAdminProviderDeleteMutation();
   const testProvider = useAdminProviderTestMutation();
   const healthCheckProvider = useAdminProviderHealthCheckMutation();
+  const syncEasylogsProducts = useAdminEasylogsProductSyncMutation();
 
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -157,6 +159,27 @@ export default function AdminProvidersPage() {
       setMessage(result.message);
     } catch (error) {
       setMessage(extractErrorMessage(error, "Health check failed."));
+    }
+  };
+
+  /**
+   * Imports the Easylogs Marketplace catalogue as Services, each with an
+   * immediately-routable service_provider_routes entry (see
+   * EasylogsProductSyncService). Uses the script's own stated default
+   * markup (20%) and NGN currency — matches the "Easylogs Product
+   * Importer / Sync" README's documented defaults.
+   */
+  const onSyncEasylogsProducts = async (provider: Provider) => {
+    setMessage(null);
+    try {
+      const result = await syncEasylogsProducts.mutateAsync({
+        providerId: provider.id,
+        currency: "NGN",
+        markupPercent: 20,
+      });
+      setMessage(result.message);
+    } catch (error) {
+      setMessage(extractErrorMessage(error, "Easylogs product sync failed."));
     }
   };
 
@@ -272,6 +295,8 @@ export default function AdminProvidersPage() {
           const isDeleting = deleteProvider.isPending && deleteProvider.variables === provider.id;
           const isTesting = testProvider.isPending && testProvider.variables === provider.id;
           const isChecking = healthCheckProvider.isPending && healthCheckProvider.variables === provider.id;
+          const isSyncing =
+            syncEasylogsProducts.isPending && syncEasylogsProducts.variables?.providerId === provider.id;
 
           if (editingId === provider.id) {
             return (
@@ -297,6 +322,17 @@ export default function AdminProvidersPage() {
               <Button size="sm" variant="outline" disabled={isChecking} onClick={() => void onHealthCheck(provider)}>
                 {isChecking ? "Checking..." : "Health check"}
               </Button>
+              {provider.slug === "easylogs" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isSyncing}
+                  onClick={() => void onSyncEasylogsProducts(provider)}
+                  title="Import Easylogs Marketplace's product catalogue as routable services."
+                >
+                  {isSyncing ? "Syncing..." : "Sync products"}
+                </Button>
+              ) : null}
               <Button size="sm" variant="outline" disabled={isBusy} onClick={() => void toggleActive(provider)}>
                 {isBusy ? "Working..." : provider.active ? "Deactivate" : "Activate"}
               </Button>
@@ -328,6 +364,8 @@ export default function AdminProvidersPage() {
       testProvider.variables,
       healthCheckProvider.isPending,
       healthCheckProvider.variables,
+      syncEasylogsProducts.isPending,
+      syncEasylogsProducts.variables,
     ],
   );
 

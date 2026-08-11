@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminWalletController;
 use App\Http\Controllers\Api\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Api\Admin\CouponController as AdminCouponController;
+use App\Http\Controllers\Api\Admin\EasylogsProductSyncController;
 use App\Http\Controllers\Api\Admin\ProviderController as AdminProviderController;
 use App\Http\Controllers\Api\Admin\ServiceController as AdminServiceController;
 use App\Http\Controllers\Api\Admin\ServiceProviderRouteController as AdminServiceProviderRouteController;
@@ -193,6 +194,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/providers/{provider}/health-check', [AdminProviderController::class, 'healthCheck']);
         Route::get('/providers/{provider}/health', [AdminProviderController::class, 'health']);
         Route::get('/providers/{provider}/services', [AdminServiceProviderRouteController::class, 'servicesForProvider']);
+        Route::post('/providers/{provider}/easylogs/products/sync', [EasylogsProductSyncController::class, 'sync']);
 
         // Provider Router (Option B): per-service routing chain (the
         // "Routing editor" UI's backing endpoints). Deliberately nested

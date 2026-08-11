@@ -505,6 +505,51 @@ export function useAdminProviderHealthCheckMutation() {
   });
 }
 
+export interface EasylogsProductSyncResult {
+  currency: string;
+  markup_percent: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  remote_categories: number;
+  remote_products: number;
+}
+
+/**
+ * POST /admin/providers/{id}/easylogs/products/sync — imports Easylogs
+ * Marketplace's catalogue as Services, each with an immediately-routable
+ * service_provider_routes entry pointing at the real Easylogs product_code
+ * (see EasylogsProductSyncService's class doc comment). Backend rejects
+ * with 422 if the target provider's slug isn't exactly 'easylogs'. Affects
+ * the services list (new/updated Service rows) and this provider's own
+ * routing chains, so invalidates both.
+ */
+export function useAdminEasylogsProductSyncMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      providerId,
+      currency,
+      markupPercent,
+    }: {
+      providerId: number;
+      currency?: string;
+      markupPercent?: number;
+    }) => {
+      const response = await api.post<{ success: boolean; message: string; data: EasylogsProductSyncResult }>(
+        `/admin/providers/${providerId}/easylogs/products/sync`,
+        { currency, markup_percent: markupPercent },
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminServices });
+      void queryClient.invalidateQueries({ queryKey: ["services"] });
+    },
+  });
+}
+
 /** GET /admin/providers/{id}/health — recent health-check history for a drill-down view. */
 export function useAdminProviderHealthQuery(providerId: number | null) {
   const isAdmin = useIsAdmin();
