@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Notifications\OrderDeliveredNotification;
 use App\Services\NotificationService;
+use App\Services\OrderFulfillmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -30,7 +31,7 @@ class AdminOrderController extends Controller
         ]);
     }
 
-    public function update(Request $request, Order $order, NotificationService $notifications)
+    public function update(Request $request, Order $order, NotificationService $notifications, OrderFulfillmentService $fulfillment)
     {
         $data = $request->validate([
             'status' => [
@@ -56,6 +57,25 @@ class AdminOrderController extends Controller
         // overwriting an existing delivered_at on a later save.
         if ($order->status === 'completed' && $order->delivered_at === null) {
             $order->forceFill(['delivered_at' => now()])->save();
+        }
+
+        // Regression guard for a real production incident (order #18,
+        // ORD-QZ4ITOZ7YE): an admin manually transitioning an order INTO
+        // 'failed'/'cancelled' previously had no refund path at all — only
+        // OrderFulfillmentService::fulfill()'s own automatic 'failed'
+        // outcome ever credited the wallet back. A customer's money could
+        // be silently kept with no refund and no record of one just
+        // because a human, rather than the router, closed out the order.
+        // refundIfNotAlready() is a no-op for an order that was never
+        // wallet-debited in the first place (e.g. the legacy
+        // OrderController::store() flow) or one that's already been
+        // refunded (e.g. this order previously failed automatically and
+        // OrderFulfillmentService::refund() already ran).
+        $wasJustClosedAsUnfulfilled = in_array($order->status, ['failed', 'cancelled'], true)
+            && ! in_array($previousStatus, ['failed', 'cancelled'], true);
+
+        if ($wasJustClosedAsUnfulfilled) {
+            $fulfillment->refundIfNotAlready($order, "admin marked order {$order->status}");
         }
 
         $order = $order->load(['user', 'service', 'items.service']);
@@ -95,7 +115,7 @@ class AdminOrderController extends Controller
                 'order',
                 'Order update',
                 $this->statusMessage($order),
-                '/orders/' . $order->id,
+                '/orders/'.$order->id,
             );
         }
 

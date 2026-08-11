@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\Transaction;
 use App\Models\Wallet;
+use App\Models\WalletTransaction;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -118,6 +119,61 @@ class OrderFulfillmentService
     }
 
     /**
+     * Public entry point for anything OUTSIDE the automatic fulfil() flow
+     * that needs the exact same "credit the wallet back for this order"
+     * behaviour — currently AdminOrderController::update(), for an admin
+     * manually transitioning an order into 'failed'/'cancelled'.
+     *
+     * This exists because AdminOrderController::update() previously had NO
+     * refund logic at all: only the automatic ProviderRouter->'failed' path
+     * above ever called refund(), so an admin manually closing out a stuck
+     * order (e.g. one left 'pending' with outcome 'no_routes') as
+     * 'failed'/'cancelled' silently kept the customer's money debited with
+     * no refund and no record of one -- a real production incident (order
+     * #18, ORD-QZ4ITOZ7YE) that surfaced this gap.
+     *
+     * Two safety guards, both required before any wallet credit happens:
+     *  - wasWalletDebited(): only orders actually paid via wallet (the
+     *    CheckoutController::store() flow) ever get refunded here. The
+     *    legacy single-service OrderController::store() flow creates an
+     *    order WITHOUT ever debiting a wallet (confirmed against
+     *    production: e.g. order #10 has no matching wallet_transactions
+     *    row at all) — refunding money that was never taken would create a
+     *    free credit, not correct a mistake.
+     *  - hasBeenRefunded(): idempotent, so calling this twice for the same
+     *    order (two admins racing, a retry, or this being called for an
+     *    order the automatic fulfil() path already refunded) never
+     *    double-credits the wallet.
+     */
+    public function refundIfNotAlready(Order $order, string $reason): bool
+    {
+        if (! $this->wasWalletDebited($order) || $this->hasBeenRefunded($order)) {
+            return false;
+        }
+
+        $this->refund($order, $reason);
+
+        return true;
+    }
+
+    public function hasBeenRefunded(Order $order): bool
+    {
+        return WalletTransaction::where('reference', $this->refundReference($order))->exists();
+    }
+
+    public function wasWalletDebited(Order $order): bool
+    {
+        return WalletTransaction::where('reference', $order->reference)
+            ->where('type', 'debit')
+            ->exists();
+    }
+
+    private function refundReference(Order $order): string
+    {
+        return $order->reference.'-REFUND';
+    }
+
+    /**
      * Maps this order's per-line ProviderRouter outcomes to a single
      * orders.status value (the existing enum: pending/processing/
      * completed/failed/cancelled — see 2026_07_20_164350_create_orders_table.php).
@@ -179,6 +235,7 @@ class OrderFulfillmentService
             }
 
             $amount = (float) $order->total ?: (float) $order->amount;
+            $reference = $this->refundReference($order);
 
             $wallet->increment('balance', $amount);
 
@@ -187,14 +244,14 @@ class OrderFulfillmentService
                 'user_id' => $order->user_id,
                 'type' => 'credit',
                 'amount' => $amount,
-                'reference' => $order->reference.'-REFUND',
+                'reference' => $reference,
                 'description' => "Refund: order {$order->reference} ({$reason})",
                 'status' => 'success',
             ]);
 
             Transaction::create([
                 'user_id' => $order->user_id,
-                'reference' => $order->reference.'-REFUND',
+                'reference' => $reference,
                 'amount' => $amount,
                 'status' => 'success',
                 'type' => 'refund',
