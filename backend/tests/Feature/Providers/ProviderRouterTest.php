@@ -252,4 +252,52 @@ class ProviderRouterTest extends TestCase
         $router->route($service, $this->makeOrder());
         $this->assertSame('offline', $failing->fresh()->health_status);
     }
+
+    /**
+     * Regression test for a production incident (order #18,
+     * ORD-QZ4ITOZ7YE): a provider that escalated to 'offline' remained
+     * permanently un-routable even after its cooldown_until naturally
+     * passed, because isRoutable() used to exclude 'offline' outright
+     * instead of relying on isInCooldown() the way it already did for
+     * 'degraded'. This asserts the corrected behaviour: once cooldown_until
+     * is in the past, an 'offline' provider must be tried again on its own
+     * (no manual admin "Health check" click required), and a subsequent
+     * success must clear it back to 'healthy'.
+     */
+    public function test_offline_provider_becomes_routable_again_once_cooldown_naturally_expires(): void
+    {
+        $service = $this->makeService();
+        $failing = $this->makeProvider('vtpass', 'timeout', priority: 1);
+        $backup = $this->makeProvider('flutterwave', 'success', priority: 2);
+
+        ServiceProviderRoute::create(['service_id' => $service->id, 'provider_id' => $failing->id, 'priority' => 1, 'enabled' => true]);
+        ServiceProviderRoute::create(['service_id' => $service->id, 'provider_id' => $backup->id, 'priority' => 2, 'enabled' => true]);
+
+        $router = $this->router();
+
+        $router->route($service, $this->makeOrder());
+        $this->assertSame('degraded', $failing->fresh()->health_status);
+
+        $failing->fresh()->forceFill(['cooldown_until' => null])->save();
+
+        $router->route($service, $this->makeOrder());
+        $this->assertSame('offline', $failing->fresh()->health_status);
+
+        // Simulate the cooldown naturally expiring (a moment already in
+        // the past, exactly what happens once OFFLINE_COOLDOWN_MINUTES
+        // elapses in real time -- unlike the two force-clears above, this
+        // does NOT null it out, to prove isInCooldown() alone is what
+        // correctly re-admits the provider) and the underlying issue being
+        // resolved (e.g. the provider's account being topped up), mirroring
+        // the production incident that surfaced this bug.
+        $failing->fresh()->forceFill([
+            'cooldown_until' => now()->subMinute(),
+            'api_key' => 'mock:success',
+        ])->save();
+
+        $result = $router->route($service, $this->makeOrder());
+
+        $this->assertSame($failing->id, $result['provider_id']);
+        $this->assertSame('healthy', $failing->fresh()->health_status);
+    }
 }

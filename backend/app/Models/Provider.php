@@ -94,23 +94,31 @@ class Provider extends Model
 
     /**
      * The single boolean ProviderRouter needs to decide "can this provider
-     * be tried right now": active (admin hasn't disabled it), not flagged
-     * 'offline' (ProviderHealthService's designation for "give up on this
-     * one for now"), and not currently cooling down from a recent failure.
+     * be tried right now": active (admin hasn't disabled it), and not
+     * currently cooling down from a recent failure.
      *
-     * Deliberately allows 'degraded' (not just 'healthy') once its
-     * cooldown has expired: 'degraded' means "one recent failure, still
-     * worth retrying", not "avoid" — excluding it here would let a single
-     * transient blip permanently strand a provider at 'degraded' with no
-     * path back to 'healthy' (recordSuccess() is the only thing that
-     * clears it, and that can only run if the provider gets tried again).
-     * Only 'offline' (a repeated/confirmed-bad incident) is excluded from
-     * routing until it recovers.
+     * Deliberately does NOT exclude 'offline' outright (nor 'degraded') —
+     * isInCooldown() is what gates "recently failed, wait before retrying"
+     * uniformly across every health status. cooldown_until is set to a
+     * longer window for 'offline' than for 'degraded' (see
+     * ProviderHealthService::OFFLINE_COOLDOWN_MINUTES vs
+     * DEGRADED_COOLDOWN_MINUTES), which is exactly what should make an
+     * 'offline' provider wait longer before its next retry — but once that
+     * cooldown naturally passes, it must become eligible again on its own.
+     *
+     * Excluding 'offline' unconditionally here (as this method used to)
+     * created a permanent-stranding bug: recordSuccess() is the only thing
+     * that ever clears health_status back to 'healthy', but it can only run
+     * if the provider is actually tried again — and if isRoutable() keeps
+     * excluding it forever, it never gets tried again, so it never
+     * recovers without a manual admin "Health check" click. That is the
+     * exact failure mode this doc comment already warned about for
+     * 'degraded' (see the git history for the previous version of this
+     * comment); the same reasoning applies equally to 'offline'.
      */
     public function isRoutable(): bool
     {
         return $this->active
-            && $this->health_status !== self::HEALTH_OFFLINE
             && ! $this->isInCooldown();
     }
 }
