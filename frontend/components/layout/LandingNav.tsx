@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Menu, X } from "lucide-react";
 
@@ -17,7 +18,7 @@ export default function LandingNav() {
   return (
     <nav className="landing-nav">
       <Link href="/" className="brand" onClick={close}>
-        <img src="/logo.png" alt="CharpsDev" className="brand-logo" />
+        <Image src="/logo.png" alt="CharpsDev logo" className="brand-logo" width={140} height={29} priority />
       </Link>
 
       <div className="nav-links">

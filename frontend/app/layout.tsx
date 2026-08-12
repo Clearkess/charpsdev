@@ -6,9 +6,71 @@ import AppProviders from "@/components/providers/AppProviders";
 import ThemeScript from "@/components/providers/ThemeScript";
 import { APP_NAME } from "@/lib/constants";
 
+const siteUrl = "https://charpsdev.vercel.app";
+const title = `${APP_NAME} — Buy Data, Airtime, Gift Cards & Virtual Numbers`;
+const description =
+  "CharpsDev is a secure digital services marketplace for buying data plans, airtime top-ups, gift cards, eSIMs and virtual numbers online. Fund your wallet, order in seconds, and track every transaction from one dashboard.";
+
 export const metadata: Metadata = {
-  title: APP_NAME,
-  description: "Recovered frontend skeleton for the CharpsDev marketplace.",
+  metadataBase: new URL(siteUrl),
+
+  title: {
+    default: title,
+    template: `%s | ${APP_NAME}`,
+  },
+
+  description,
+
+  keywords: [
+    "CharpsDev",
+    "buy data online",
+    "airtime top-up",
+    "gift cards",
+    "virtual numbers",
+    "eSIM",
+    "digital services marketplace",
+    "wallet payments",
+  ],
+
+  alternates: {
+    canonical: "/",
+  },
+
+  openGraph: {
+    type: "website",
+    url: siteUrl,
+    siteName: APP_NAME,
+    title,
+    description,
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: `${APP_NAME} — digital services marketplace`,
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+    images: ["/opengraph-image"],
+  },
+
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
