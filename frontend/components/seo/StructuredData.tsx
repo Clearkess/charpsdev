@@ -1,12 +1,18 @@
 const siteUrl = "https://charpsdev.vercel.app";
 
+export type FaqEntry = { q: string; a: string };
+
 /**
  * JSON-LD structured data for the homepage. Describes CharpsDev as what it
  * actually is — a digital services marketplace (data/airtime/gift
  * cards/virtual numbers/eSIMs), not a generic "developer tools" product —
  * so search engines index the correct entity and search intent.
+ *
+ * `faqs` is optional and, when provided, adds an FAQPage node built from the
+ * same Q&A content already rendered on the page — this makes the homepage
+ * eligible for Google's FAQ rich results without maintaining the copy twice.
  */
-export default function StructuredData() {
+export default function StructuredData({ faqs = [] }: { faqs?: FaqEntry[] }) {
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -45,6 +51,22 @@ export default function StructuredData() {
           availability: "https://schema.org/InStock",
         },
       },
+      ...(faqs.length > 0
+        ? [
+            {
+              "@type": "FAQPage",
+              "@id": `${siteUrl}/#faq`,
+              mainEntity: faqs.map((item) => ({
+                "@type": "Question",
+                name: item.q,
+                acceptedAnswer: {
+                  "@type": "Answer",
+                  text: item.a,
+                },
+              })),
+            },
+          ]
+        : []),
     ],
   };
 

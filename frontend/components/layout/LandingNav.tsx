@@ -8,6 +8,7 @@ import { ArrowRight, Menu, X } from "lucide-react";
 const NAV_LINKS = [
   { href: "#services", label: "Services" },
   { href: "#how-it-works", label: "How It Works" },
+  { href: "#features", label: "Features" },
   { href: "#why-us", label: "Why CharpsDev" },
 ];
 

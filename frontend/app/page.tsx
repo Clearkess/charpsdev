@@ -1,6 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Bolt, CreditCard, Globe2, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
+import {
+  ArrowRight,
+  BadgeCheck,
+  Bolt,
+  CreditCard,
+  Globe2,
+  Headphones,
+  Layers,
+  ShieldCheck,
+  Sparkles,
+  WalletCards,
+} from "lucide-react";
 import LandingNav from "@/components/layout/LandingNav";
 import StructuredData from "@/components/seo/StructuredData";
 
@@ -9,6 +20,48 @@ const services = [
   ["Data & Airtime", "Fast, convenient top-ups and bundles", Bolt],
   ["Digital Products", "Popular digital products in one place", CreditCard],
   ["Secure Wallet", "Fund, pay and track your orders", WalletCards],
+];
+
+const features = [
+  {
+    title: "Verified, reliable delivery",
+    text: "Every data plan, airtime top-up, gift card and virtual number on CharpsDev runs through checked provider connections, so what you order is what lands in your account.",
+    icon: BadgeCheck,
+  },
+  {
+    title: "Secure wallet transactions",
+    text: "Purchases are paid from your CharpsDev wallet instead of exposing card details to individual services, and any order that can't be fulfilled is refunded straight back to your balance.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "A wide range of services",
+    text: "Data bundles, airtime, gift cards, eSIMs and virtual numbers — browse a growing catalogue of digital services without opening a separate account for each one.",
+    icon: Layers,
+  },
+  {
+    title: "Support when you need it",
+    text: "Questions about an order, a wallet transaction or your account are handled by a real support channel, not a dead end — so you're never left guessing.",
+    icon: Headphones,
+  },
+];
+
+const journeySteps = [
+  {
+    title: "Explore services",
+    text: "Browse data plans, airtime, gift cards, eSIMs and virtual numbers, and use categories to find exactly what you need.",
+  },
+  {
+    title: "Fund your wallet",
+    text: "Add funds securely using the available payment options — pay once, then check out instantly for every future order.",
+  },
+  {
+    title: "Checkout securely",
+    text: "Confirm your order and pay directly from your wallet balance. No card details re-entered, no third-party checkout pages.",
+  },
+  {
+    title: "Track & enjoy",
+    text: "Watch your order move through your dashboard in real time, with a full transaction history you can revisit any time.",
+  },
 ];
 
 const faqs = [
@@ -37,7 +90,7 @@ const faqs = [
 export default function HomePage() {
   return (
     <main className="landing">
-      <StructuredData />
+      <StructuredData faqs={faqs} />
       <div className="landing-grid" />
       <LandingNav />
 
@@ -69,7 +122,30 @@ export default function HomePage() {
       <section id="how-it-works" className="section steps-section">
         <div className="section-heading centered"><span>HOW IT WORKS</span><h2>From signup to service<br/><em>in a few simple steps.</em></h2></div>
         <div className="steps">
-          {["Create your account","Fund your wallet","Choose a service","Track your order"].map((step, i)=><div className="step" key={step}><b>0{i+1}</b><h3>{step}</h3><p>{["Register in minutes and access your personal dashboard.","Add funds securely using the available payment options.","Browse categories and select the service that fits your needs.","View order status and transaction history from one place."][i]}</p></div>)}
+          {journeySteps.map((step, i) => (
+            <div className="step" key={step.title}>
+              <b>0{i + 1}</b>
+              <h3>{step.title}</h3>
+              <p>{step.text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="features" className="section">
+        <div className="section-heading centered">
+          <span>WHAT SETS US APART</span>
+          <h2>Built to be the easiest way<br/><em>to buy digital services.</em></h2>
+          <p>We validate every provider connection, keep checkout entirely inside your wallet, and give you a real support channel instead of a dead end.</p>
+        </div>
+        <div className="feature-grid">
+          {features.map(({ title, text, icon: Icon }) => (
+            <article className="feature-card" key={title}>
+              <div className="icon-wrap"><Icon size={22} /></div>
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -126,6 +202,10 @@ export default function HomePage() {
         </Link>
         <p>Digital services, made simple.</p>
         <div><Link href="/login">Log in</Link><Link href="/register">Create account</Link><Link href="/services">Services</Link></div>
+        <p className="footer-note">
+          CharpsDev processes all orders and wallet transactions for legitimate personal and business use only,
+          in line with each service provider&apos;s terms. Thank you for using the platform responsibly.
+        </p>
         <small>© {new Date().getFullYear()} CharpsDev. All rights reserved.</small>
       </footer>
     </main>
