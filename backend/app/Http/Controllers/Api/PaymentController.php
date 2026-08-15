@@ -72,7 +72,13 @@ class PaymentController extends Controller
             ]);
         }
 
-        $this->creditWallet((int) $metadataUserId, $reference, (float) $payment['amount'] / 100, $notifications);
+        $this->creditWallet(
+            (int) $metadataUserId,
+            $reference,
+            (float) $payment['amount'] / 100,
+            $notifications,
+            isset($payment['id']) ? (string) $payment['id'] : null,
+        );
 
         return response()->json([
             'success' => true,
@@ -122,7 +128,13 @@ class PaymentController extends Controller
         }
 
         $userId = (int) data_get($payment, 'metadata.user_id');
-        $this->creditWallet($userId, $reference, (float) $payment['amount'] / 100, $notifications);
+        $this->creditWallet(
+            $userId,
+            $reference,
+            (float) $payment['amount'] / 100,
+            $notifications,
+            isset($payment['id']) ? (string) $payment['id'] : null,
+        );
 
         return response()->json(['message' => 'Wallet funded.']);
     }
@@ -136,9 +148,9 @@ class PaymentController extends Controller
      * written on every deposit, matching the pattern already used by
      * CheckoutController and AdminWalletController.
      */
-    private function creditWallet(int $userId, string $reference, float $amount, NotificationService $notifications): void
+    private function creditWallet(int $userId, string $reference, float $amount, NotificationService $notifications, ?string $gatewayReference = null): void
     {
-        DB::transaction(function () use ($userId, $reference, $amount) {
+        DB::transaction(function () use ($userId, $reference, $amount, $gatewayReference) {
             $wallet = Wallet::query()->where('user_id', $userId)->lockForUpdate()->first();
             $wallet ??= Wallet::create(['user_id' => $userId, 'balance' => 0, 'currency' => 'NGN']);
 
@@ -150,9 +162,11 @@ class PaymentController extends Controller
                 'user_id' => $userId,
                 'reference' => $reference,
                 'amount' => $amount,
+                'currency' => $wallet->currency ?? 'NGN',
                 'status' => 'success',
                 'type' => 'deposit',
                 'gateway' => 'paystack',
+                'gateway_reference' => $gatewayReference,
                 'description' => $description,
             ]);
 

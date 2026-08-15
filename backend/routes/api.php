@@ -85,6 +85,17 @@ Route::post('/webhooks/easylogs', [EasylogsWebhookController::class, 'handle']);
 // contact email — see PublicSettingController for the exact key allowlist.
 Route::get('/settings/public', [PublicSettingController::class, 'index']);
 
+// Public, read-only catalogue browsing (SEO fix: /services and
+// /virtual-numbers now render real content for anonymous visitors and
+// crawlers instead of a login redirect, see app/robots.ts /
+// app/sitemap.ts on the frontend). Each of these is a plain DB read with
+// no third-party cost or per-user data, so opening them up carries no
+// risk — cart/checkout/order actions below remain behind auth:sanctum.
+Route::get('/services', [ServiceController::class, 'index']);
+Route::get('/services/{service}/reviews', [ReviewController::class, 'index']);
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/virtual-numbers/providers', [VirtualNumberController::class, 'providers']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
@@ -119,10 +130,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/push/subscribe', [PushSubscriptionController::class, 'subscribe']);
     Route::post('/push/unsubscribe', [PushSubscriptionController::class, 'unsubscribe']);
 
-    Route::get('/services', [ServiceController::class, 'index']);
-    Route::get('/services/{service}/reviews', [ReviewController::class, 'index']);
+    // GET /services, GET /services/{service}/reviews, GET /categories and
+    // GET /virtual-numbers/providers are now public (see above) — only the
+    // write action stays behind auth here.
     Route::post('/services/{service}/reviews', [ReviewController::class, 'store']);
-    Route::get('/categories', [CategoryController::class, 'index']);
 
     Route::get('/cart', [CartController::class, 'index']);
     Route::post('/cart', [CartController::class, 'store']);
@@ -146,7 +157,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Phase 7 (Provider API Sync) follow-up: virtual-number/SMS-OTP
     // rentals from 5SIM / SMS-Man / OnlineSIM. Provider-scoped browsing:
     // pick a provider, then that provider's own countries/services.
-    Route::get('/virtual-numbers/providers', [VirtualNumberController::class, 'providers']);
+    // GET /virtual-numbers/providers is public (see above); country/service
+    // lookups stay authenticated since they hit the live paid 3rd-party APIs.
     Route::get('/virtual-numbers/{provider}/countries', [VirtualNumberController::class, 'countries']);
     Route::get('/virtual-numbers/{provider}/services', [VirtualNumberController::class, 'services']);
     Route::get('/virtual-numbers/orders', [VirtualNumberController::class, 'index']);

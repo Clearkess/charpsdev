@@ -199,6 +199,7 @@ class CheckoutController extends Controller
                     'user_id' => $userId,
                     'reference' => $reference,
                     'amount' => $total,
+                    'currency' => $wallet->currency ?? 'NGN',
                     'status' => 'success',
                     'type' => 'purchase',
                     'gateway' => 'wallet',

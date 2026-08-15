@@ -253,6 +253,7 @@ class OrderFulfillmentService
                 'user_id' => $order->user_id,
                 'reference' => $reference,
                 'amount' => $amount,
+                'currency' => $wallet->currency ?? 'NGN',
                 'status' => 'success',
                 'type' => 'refund',
                 'gateway' => 'wallet',

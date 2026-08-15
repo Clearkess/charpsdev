@@ -11,9 +11,13 @@ class Transaction extends Model
         'user_id',
         'reference',
         'amount',
+        'currency',
         'status',
         'type',
         'gateway',
+        'gateway_reference',
+        'idempotency_key',
+        'failure_reason',
         'description',
     ];
 
