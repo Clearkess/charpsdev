@@ -9,7 +9,7 @@ const NAV_LINKS = [
   { href: "#services", label: "Services" },
   { href: "#how-it-works", label: "How It Works" },
   { href: "#features", label: "Features" },
-  { href: "#why-us", label: "Why CharpsDev" },
+  { href: "#why-us", label: "Why Vaultra" },
 ];
 
 export default function LandingNav() {
@@ -19,7 +19,7 @@ export default function LandingNav() {
   return (
     <nav className="landing-nav">
       <Link href="/" className="brand" onClick={close}>
-        <Image src="/logo.png" alt="CharpsDev logo" className="brand-logo" width={140} height={29} priority />
+        <Image src="/logo.png" alt="Vaultra logo" className="brand-logo" width={140} height={29} priority />
       </Link>
 
       <div className="nav-links">

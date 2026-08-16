@@ -8,13 +8,14 @@ import { APP_NAME } from "@/lib/constants";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: `${APP_NAME} — Digital services marketplace`,
+    name: `${APP_NAME} — Social accounts, virtual numbers & digital products marketplace`,
     short_name: APP_NAME,
-    description: "Buy VTU, gift cards, eSIMs, and digital services on the CharpsDev marketplace.",
+    description:
+      "Buy unique social media accounts, virtual numbers, eSIMs, gift cards and other digital products on the Vaultra marketplace.",
     start_url: "/dashboard",
     display: "standalone",
     background_color: "#f8fafc",
-    theme_color: "#f6b91f",
+    theme_color: "#14b8a6",
     orientation: "portrait-primary",
     icons: [
       {

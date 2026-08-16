@@ -7,9 +7,9 @@ import ThemeScript from "@/components/providers/ThemeScript";
 import { APP_NAME } from "@/lib/constants";
 
 const siteUrl = "https://charpsdev.vercel.app";
-const title = `${APP_NAME} — Buy Data, Airtime, Gift Cards & Virtual Numbers`;
+const title = `${APP_NAME} — Unique Social Media Accounts, Virtual Numbers & eSIMs`;
 const description =
-  "CharpsDev is a secure digital services marketplace for buying data plans, airtime top-ups, gift cards, eSIMs and virtual numbers online. Fund your wallet, order in seconds, and track every transaction from one dashboard.";
+  "Vaultra is a marketplace for unique social media accounts, virtual numbers, eSIMs, data plans, airtime top-ups and gift cards — all cheap and pocket friendly. Fund your wallet, order in seconds, and track every transaction from one dashboard.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -22,12 +22,13 @@ export const metadata: Metadata = {
   description,
 
   keywords: [
-    "CharpsDev",
+    "Vaultra",
+    "buy social media accounts",
+    "virtual numbers",
+    "eSIM",
     "buy data online",
     "airtime top-up",
     "gift cards",
-    "virtual numbers",
-    "eSIM",
     "digital services marketplace",
     "wallet payments",
   ],
@@ -47,7 +48,7 @@ export const metadata: Metadata = {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: `${APP_NAME} — digital services marketplace`,
+        alt: `${APP_NAME} — social media accounts, virtual numbers & digital products marketplace`,
       },
     ],
   },

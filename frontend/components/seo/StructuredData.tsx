@@ -3,10 +3,10 @@ const siteUrl = "https://charpsdev.vercel.app";
 export type FaqEntry = { q: string; a: string };
 
 /**
- * JSON-LD structured data for the homepage. Describes CharpsDev as what it
- * actually is — a digital services marketplace (data/airtime/gift
- * cards/virtual numbers/eSIMs), not a generic "developer tools" product —
- * so search engines index the correct entity and search intent.
+ * JSON-LD structured data for the homepage. Describes Vaultra as what it
+ * actually is — a marketplace for unique social media accounts, virtual
+ * numbers, eSIMs and other digital products — so search engines index the
+ * correct entity and search intent.
  *
  * `faqs` is optional and, when provided, adds an FAQPage node built from the
  * same Q&A content already rendered on the page — this makes the homepage
@@ -20,9 +20,9 @@ export default function StructuredData({ faqs = [] }: { faqs?: FaqEntry[] }) {
         "@type": "WebSite",
         "@id": `${siteUrl}/#website`,
         url: `${siteUrl}/`,
-        name: "CharpsDev",
+        name: "Vaultra",
         description:
-          "CharpsDev is a digital services marketplace for buying data plans, airtime, gift cards, eSIMs and virtual numbers online.",
+          "Vaultra is a marketplace for unique social media accounts, virtual numbers, eSIMs, data plans, airtime and gift cards online.",
         potentialAction: {
           "@type": "SearchAction",
           target: `${siteUrl}/services?query={search_term_string}`,
@@ -32,19 +32,19 @@ export default function StructuredData({ faqs = [] }: { faqs?: FaqEntry[] }) {
       {
         "@type": "Organization",
         "@id": `${siteUrl}/#organization`,
-        name: "CharpsDev",
+        name: "Vaultra",
         url: `${siteUrl}/`,
         logo: `${siteUrl}/logo.png`,
       },
       {
         "@type": "WebApplication",
         "@id": `${siteUrl}/#application`,
-        name: "CharpsDev",
+        name: "Vaultra",
         url: `${siteUrl}/`,
         applicationCategory: "BusinessApplication",
         operatingSystem: "Web, Android, iOS",
         description:
-          "Fund your wallet and buy data, airtime, gift cards, eSIMs and virtual numbers securely from a single dashboard.",
+          "Fund your wallet and buy unique social media accounts, virtual numbers, eSIMs, data, airtime and gift cards securely from a single dashboard.",
         offers: {
           "@type": "AggregateOffer",
           priceCurrency: "NGN",

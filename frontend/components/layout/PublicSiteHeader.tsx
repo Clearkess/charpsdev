@@ -15,7 +15,7 @@ export default function PublicSiteHeader() {
   return (
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4 md:px-8">
-        <Link href="/" aria-label="CharpsDev home">
+        <Link href="/" aria-label="Vaultra home">
           <BrandMark className="h-7 w-auto" />
         </Link>
         <nav className="flex items-center gap-3">

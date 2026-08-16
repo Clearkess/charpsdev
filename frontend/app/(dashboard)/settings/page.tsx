@@ -36,7 +36,7 @@ export default function SettingsPage() {
           <CardTitle>Appearance</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">Choose how CharpsDev looks on this device.</p>
+          <p className="text-sm text-muted-foreground">Choose how Vaultra looks on this device.</p>
           <div className="flex flex-wrap gap-2">
             {themeOptions.map((option) => {
               const Icon = option.icon;
@@ -87,7 +87,7 @@ export default function SettingsPage() {
           <CardTitle>Session</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">Sign out of CharpsDev on this device.</p>
+          <p className="text-sm text-muted-foreground">Sign out of Vaultra on this device.</p>
           <Button
             size="sm"
             className="bg-primary text-primary-foreground hover:bg-primary/90"

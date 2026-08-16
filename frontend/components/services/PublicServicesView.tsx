@@ -108,8 +108,8 @@ export default function PublicServicesView() {
       <div className="max-w-2xl">
         <h1 className="font-heading text-3xl font-bold">Browse services</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Data plans, airtime top-ups, gift cards, eSIMs and virtual numbers — explore what&apos;s available on
-          CharpsDev. Create a free account to fund your wallet and start ordering in seconds.
+          Unique social media accounts, virtual numbers, eSIMs, data plans, airtime top-ups and gift cards — explore
+          what&apos;s available on Vaultra. Create a free account to fund your wallet and start ordering in seconds.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button size="lg" render={<Link href={`/register?next=${encodeURIComponent("/services")}`} />}>
@@ -140,7 +140,7 @@ export default function PublicServicesView() {
       <div className="flex flex-wrap items-center gap-2 rounded-xl bg-primary/5 p-4 ring-1 ring-primary/15">
         <Badge variant="secondary">Secure wallet checkout</Badge>
         <p className="text-sm text-muted-foreground">
-          Every purchase is paid from your CharpsDev wallet — no card details re-entered for each order, and orders
+          Every purchase is paid from your Vaultra wallet — no card details re-entered for each order, and orders
           that can&apos;t be fulfilled are refunded straight back to your balance.
         </p>
       </div>

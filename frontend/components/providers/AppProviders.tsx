@@ -5,6 +5,7 @@ import QueryProvider from "@/components/providers/QueryProvider";
 import AuthBootstrap from "@/components/providers/AuthBootstrap";
 import ThemeProvider from "@/components/providers/ThemeProvider";
 import { Toaster } from "@/components/ui/toast";
+import SupportButtons from "@/components/common/SupportButtons";
 
 export default function AppProviders({ children }: { children: ReactNode }) {
   return (
@@ -12,6 +13,7 @@ export default function AppProviders({ children }: { children: ReactNode }) {
       <QueryProvider>
         <AuthBootstrap>
           <Toaster>{children}</Toaster>
+          <SupportButtons />
         </AuthBootstrap>
       </QueryProvider>
     </ThemeProvider>
