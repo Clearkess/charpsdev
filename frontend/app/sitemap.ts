@@ -4,9 +4,14 @@ const baseUrl = "https://charpsdev.vercel.app";
 
 /**
  * Only lists routes that render real, indexable content for a logged-out
- * visitor. Dashboard/admin/wallet/etc. are client-auth-gated (see
+ * visitor. Dashboard/admin/wallet/etc. remain client-auth-gated (see
  * ProtectedRoute.tsx) and excluded via app/robots.ts, so they're
  * intentionally left out here too.
+ *
+ * /services and /virtual-numbers are included (Top-3-Fixes, Fix 2): both
+ * are now dual-mode top-level routes with a real public catalogue/teaser
+ * for anonymous visitors, so they belong in the sitemap like any other
+ * public marketing/content page.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
@@ -27,6 +32,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/services`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/virtual-numbers`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.7,
     },
   ];
 }
