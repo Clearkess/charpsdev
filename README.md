@@ -856,3 +856,34 @@ User asked to convert the existing Next.js app into an Android app using Capacit
 - **Native (`mobile/android/.../MainActivity.java`):** now explicitly calls `CookieManager.getInstance().setAcceptCookie(true)` before the Capacitor Bridge/WebView is created, and `setAcceptThirdPartyCookies(webView, true)` right after — closing the native-side half of the same race instead of relying on WebView defaults.
 
 **Verification performed:** `npx tsc --noEmit` and `npm run build` both pass clean on the frontend with these changes. Not yet verified on a real Android emulator/device running a freshly built APK (this sandbox has no Android emulator, only the Gradle CLI tooling used to validate builds) — **next step is to rebuild the APK via the now-working CI pipeline (§23) and have the user re-test the exact repro on their device.**
+
+## 25) Top 3 Critical Fixes — Backend half of Fix 2 & Fix 3 (deployed)
+
+Working through a 3-item "Top 3 Critical Fixes" checklist (`/` vs `/dashboard` landing, opening commerce surfaces to search, hardening the auth cookie + payment schema). This section covers the backend portions completed and deployed to Railway production in this pass; the frontend portions (dual-mode `/services`/`/virtual-numbers` pages, `robots.ts`/`sitemap.ts` updates, SSR-aware `/dashboard` check, `HttpOnly`/`__Host-` cookie redesign) are **not yet started** — see the checklist note below.
+
+### Fix 2 (backend) — public catalogue routes
+
+`GET /services`, `GET /services/{service}/reviews`, `GET /categories`, and `GET /virtual-numbers/providers` moved out of the `auth:sanctum` group in `routes/api.php`. Each is a plain DB read scoped to active/public records with no third-party cost and no per-user data, so exposing them carries no risk — this is what will let a real SEO-friendly `/services` page (still to be built on the frontend) actually render content for anonymous visitors and crawlers instead of hitting a 401. Write actions (`POST /services/{service}/reviews`) and the live, paid provider lookups (`/virtual-numbers/{provider}/countries`, `/services`) remain authenticated. New `PublicCatalogueApiTest` (4 tests) covers both the newly-public access and confirms cart/wallet/orders/live-provider-lookup routes are still correctly protected.
+
+### Fix 3 (backend) — transactions schema hardening
+
+New migration `2026_08_15_040311_add_currency_and_metadata_to_transactions_table.php` adds `currency` (varchar 3), `gateway_reference`, `idempotency_key` (unique), and `failure_reason` (text) to `transactions` — all nullable and guarded with `hasColumn` checks — plus a composite index on `(user_id, status, created_at)`. `gateway` was **not** re-added since it already existed from an earlier migration. `Transaction::$fillable` extended to match, and `currency` (and, for the Paystack deposit path, `gateway_reference`) is now populated at every write site: `PaymentController::creditWallet()` (Paystack `verify()`/`webhook()`, using Paystack's own transaction `id` as `gateway_reference`), `AdminWalletController::credit()`/`debit()`, `CheckoutController`'s purchase write, and `OrderFulfillmentService`'s refund write — each defaulting to the relevant wallet's own `currency` (falls back to `NGN`).
+
+The checklist's "confirm backend returns JSON 401 (not redirect) when token invalid on `/api/*`" item required **no code change** — `bootstrap/app.php`'s `redirectGuestsTo` (returns `null` for `api/*`, forcing the JSON exception path) and `shouldRenderJsonWhen(fn ($r) => $r->is('api/*'))` already guaranteed this; confirmed via curl against production for both a missing and a garbage bearer token.
+
+### Deployed and verified live
+
+- Full local suite: **72/72 passing** before deploy.
+- Committed `fd91d29`, pushed to `origin/main`.
+- Redeployed via the established Railway GraphQL `serviceConnect` (source link had gone stale again, as expected — see §7/§11 notes) + `serviceInstanceDeploy(latestCommit: true)` pattern. Deployment `4f908efa-...` reached `SUCCESS` on commit `fd91d29`; the new migration ran automatically via `preDeployCommand`.
+- **Schema confirmed live** via a direct `psql` connection to the production Postgres (`tokaido.proxy.rlwy.net` public proxy): `transactions` now has all 4 new columns plus the `transactions_user_status_created_idx` composite index; `migrations` table shows the new migration recorded in batch 10.
+- **Route exposure confirmed live** against `https://charpsdev-production.up.railway.app`: `GET /api/services`, `/api/categories`, `/api/virtual-numbers/providers` all return `200` with no auth header; `/api/cart` and `/api/virtual-numbers/5sim/countries` correctly still return `401`.
+- **End-to-end write-site wiring confirmed live**: logged in as `test@example.com`, added a service to cart, checked out (order routed to the `easylogs` provider, which correctly rejected for insufficient upstream balance and auto-refunded per the existing router logic) — the resulting `transactions` rows for both the `purchase` and the automatic `refund` correctly show `currency = 'NGN'`; wallet balance confirmed unchanged end-to-end (₦68,400.00 before and after, refund made the customer whole). No manual cleanup needed since the order self-resolved to `failed` + refunded.
+
+### Not yet done (tracked separately, unblocked to start next)
+
+- Frontend: dual-mode (public SEO teaser + full authenticated app) `/services` and `/virtual-numbers` pages — currently these still live entirely inside the `(dashboard)` route group behind `ProtectedRoute`, so the newly-public API routes above aren't reachable from the UI for anonymous visitors yet.
+- Frontend: remove `/services`/`/virtual-numbers` from `app/robots.ts`'s disallow list and add them to `app/sitemap.ts` — deliberately held until the dual-mode pages above exist, to avoid indexing a login redirect.
+- Frontend: SSR-aware auth check specifically for `/dashboard` to remove the client-only `ProtectedRoute` "Loading your workspace..." flash.
+- Frontend: `HttpOnly`/`Secure`/`SameSite=Lax`/`__Host-charpsdev_token` cookie redesign — requires moving the cookie write from the current client-side `document.cookie` (`lib/cookies.ts`) into a Next.js Route Handler, since `HttpOnly` is fundamentally impossible to set from client JS; also requires re-threading `lib/api.ts`'s `Authorization` header source and `authStore.ts`'s session lifecycle.
+- Fix 1 (`/` vs `/dashboard`): investigation already confirmed no redirect conflict exists in code today and `sitemap.ts` already lists `/` at `priority: 1` — this item is effectively a documentation/smoke-test confirmation, not a code change, but the literal smoke-test step hasn't been formally re-run since this deploy.
