@@ -1014,3 +1014,61 @@ Continued past the login fix with the rest of the requested walkthrough, driven 
 - **Final UI walkthrough**: ✅ complete — login, dashboard, wallet view, fund-wallet (Paystack init), add-to-cart, checkout/order placement, order-resolution/auto-refund, post-order refresh, and logout all verified end-to-end through the real production UI with no unexpected behavior. Wallet balance unchanged at ₦68,400.00 after the full round trip, as expected.
 
 Note: `frontend/.env.local` (gitignored, `NEXT_PUBLIC_API_URL=https://charpsdev-production.up.railway.app/api`) remains in the sandbox's local working tree from the local-verification attempt above — harmless since it's gitignored and never committed, kept in case further local-against-production debugging is needed later.
+
+## 28) Independent review caught a second race condition — logout (commit `bdd9bad`)
+
+An independent reviewer re-verified §27's claims against the live site and the actual repo (not just my own report) and correctly flagged one real bug in addition to catching two false positives in their own read of the code. Recorded here in full for accuracy.
+
+### What the reviewer got right (real bug, now fixed)
+
+They predicted, from reading the fix shape of `useLoginMutation` alone, that the **opposite direction — logout — almost certainly had the same race**: an async cookie-write/clear not being awaited before a redirect fires. I reproduced this live with the same Playwright network-tracing technique as §27, and it was correct:
+
+```
+POST /api/logout                    200
+DELETE /api/auth/session                  (starts)
+GET  /login?next=%2Fdashboard&_rsc        (fires before DELETE resolves)
+RESP /api/auth/session              200   (too late)
+RESP 307 /login -> ...                    (proxy.ts's isAuthPage+token check
+                                            saw the STALE cookie, bounced to /dashboard)
+GET  /dashboard
+RESP 307 /dashboard                       (bounced again)
+GET  /login?next=%2Fdashboard
+RESP 200 /login?next=%2Fdashboard         (lands, 2 extra round trips later)
+```
+
+**Root cause**: `authStore.clearSession()` set `{ token: null, user: null }` synchronously *before* `clearSessionCookie()`'s `DELETE /api/auth/session` resolved. `ProtectedRoute`'s redirect effect reacts to `user` becoming `null` immediately, firing `router.replace('/login')` while the cookie clear was still in flight — the exact same shape as §27's login bug, just inverted.
+
+**Fix** (`bdd9bad`): `clearSession()` now awaits the cookie clear *first*, then flips local state. Both call sites that navigate afterward now await it: `useLogoutMutation`'s `onSettled` and `AuthBootstrap`'s `onUnauthorized` (401 auto-logout) handler, which has the identical shape. `setUser()` was left fire-and-forget since neither of its call sites navigates afterward.
+
+Verified `tsc`/`build` clean, then re-traced live post-deploy: `DELETE /api/auth/session` now resolves *before* `GET /login` fires, landing in a single hop with no bounce through `/dashboard`.
+
+Also checked, as the reviewer requested, whether the same pattern exists elsewhere:
+- **Register** — delegates to `useLoginMutation` (`login.mutateAsync(...)` inside `useRegisterMutation`), so it inherits the §27 fix automatically. Re-traced live with a fresh throwaway account: registers → logs in → lands directly on `/dashboard`, no bounce.
+- **Reset password** — `useResetPasswordMutation` doesn't call `setSession`/`clearSession` at all (it's just a password-change API call), and `ResetPasswordForm` only sets a status message afterward, no `router.push` follows. Not applicable — no race exists here.
+- **OAuth ("Continue with Google")** — not implemented anywhere in this codebase; nothing to check.
+
+### What the reviewer got wrong (both plausible-sounding, both false on inspection of the actual repo)
+
+1. **"`app/dashboard/layout.tsx` still uses the client-only `ProtectedRoute` wrapper, not a server cookie check — the SSR fix might not have shipped."** This was based on reading a *different, older snapshot* of the project surfaced by their Hub file listing (a flat `app/dashboard/layout.tsx`, and a `proxy.ts` that still gated `/services` and read an unprefixed `charpsdev_token` cookie) rather than the actual current file at `frontend/app/(dashboard)/layout.tsx` in the real repo on `main`. That file **is** an `async` Server Component that calls `cookies()` from `next/headers` before rendering, exactly as §26 described — confirmed again just now by re-reading it directly from the git working tree (`git log` shows it was last touched by `6d6a333`, the SSR-fix commit, and hasn't changed since). `ProtectedRoute` is still used *inside* it deliberately (as an inner client-side safety net for a stale/revoked-but-present cookie), not instead of it — the two don't race, because the server check runs first and only ever redirects (never renders `ProtectedRoute` at all) when there's no cookie; when a cookie is present, `ProtectedRoute` is told to skip its own loading spinner (`skipLoadingScreen`) and never independently decides to redirect unless the client-side `/me` check later fails.
+
+2. **"`/dashboard`'s `BAILOUT_TO_CLIENT_SIDE_RENDERING` + `Loading login form...` HTML is the dashboard's own auth-check artifact."** This was because their `crawler` tool auto-followed the anonymous-visitor `307` redirect from `/dashboard` to `/login?next=%2Fdashboard` and reported the *login* page's markup as if it were the dashboard's. `Loading login form...` is `app/(auth)/login/page.tsx`'s own `<Suspense fallback>` text — required because `LoginForm` calls `useSearchParams()`, which forces Next.js to wrap it in a Suspense boundary during streaming SSR (`BAILOUT_TO_CLIENT_SIDE_RENDERING` is Next's own marker for exactly that boundary). It has nothing to do with dashboard auth. Confirmed directly: `curl -o /dev/null -w '%{http_code} %{redirect_url}'` on `/dashboard` returns `307` to `/login?next=%2Fdashboard` with no body, and `curl -L` (following the redirect, mirroring what a crawler that auto-follows would see) lands on exactly that `/login` HTML containing the `Loading login form...` fallback — matching their report byte-for-byte once the redirect-follow is accounted for.
+
+3. **"`robots.txt` still disallows `/services`/`/virtual-numbers` and `sitemap.xml` only lists 3 URLs — Fix 2 hasn't shipped."** Same stale-snapshot issue as (1): re-fetched both live, cache-busted (`?cb=$(date +%s)`) and with explicit `age`/`x-vercel-cache` header inspection to rule out a stale CDN edge cache — `robots.txt` has never listed `/services` or `/virtual-numbers` under `Disallow` on the currently-deployed build (only `/dashboard`, `/admin`, `/wallet`, `/orders`, `/cart`, `/settings`, `/support`, `/notifications`, `/profile`, `/payment`, `/api` are disallowed), and `sitemap.xml` currently lists all 5 expected URLs (`/`, `/register`, `/login`, `/services` at priority 0.7/monthly, `/virtual-numbers` at priority 0.7/monthly) — exactly as §26 described.
+
+### .env.local audit
+
+Ran the reviewer's suggested check on `main` after `bdd9bad`:
+
+```
+git grep -nE '\.env\.local|env\.local' -- ':!*.md' ':!README.md'
+```
+
+Returns exactly one line — the `.gitignore` entry (`frontend/.env.local`) — confirming no tracked file references it. Clean, as expected.
+
+### Net status after this review pass
+
+- **Login race (§27)** and **logout/401 race (this section)**: ✅ both found and fixed, live and re-verified via Playwright network traces against the real production deployment.
+- **Register**: ✅ confirmed to inherit the login fix automatically (traced live with a fresh account).
+- **Reset password, OAuth**: not applicable — no matching code path exists to race.
+- **SSR-aware `/dashboard` check, `robots.txt`, `sitemap.xml`**: ✅ all re-confirmed live and unchanged from §26 — the reviewer's concerns here traced back to reading a stale project snapshot and a redirect-following crawler misattributing the login page's Suspense fallback to the dashboard, not to any actual regression.
+- `.env.local`: ✅ confirmed clean on `main` (gitignored only, no tracked references).
