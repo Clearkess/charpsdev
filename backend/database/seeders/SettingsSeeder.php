@@ -18,14 +18,14 @@ class SettingsSeeder extends Seeder
         $defaults = [
             [
                 'key' => 'site_name',
-                'value' => 'CharpsDev',
+                'value' => 'Vaultra',
                 'type' => 'string',
                 'group' => 'general',
                 'label' => 'Site name',
             ],
             [
                 'key' => 'support_email',
-                'value' => 'hello@charpsdev.com',
+                'value' => 'hello@vaultra.com',
                 'type' => 'string',
                 'group' => 'general',
                 'label' => 'Support email',
@@ -53,7 +53,7 @@ class SettingsSeeder extends Seeder
             ],
             // Virtual numbers (5SIM / SMS-Man / OnlineSIM): all three price
             // in USD while the wallet is NGN-only, so every purchase needs
-            // an FX rate; markup is CharpsDev's margin on top of the raw
+            // an FX rate; markup is Vaultra's margin on top of the raw
             // provider cost. Both are snapshotted onto the order at
             // purchase time (see VirtualNumberService) so a later admin
             // edit here never changes what a past order already charged.

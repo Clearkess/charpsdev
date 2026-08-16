@@ -28,6 +28,6 @@ return [
     |
     */
 
-    'vapid_subject' => env('VAPID_SUBJECT', 'mailto:hello@charpsdev.com'),
+    'vapid_subject' => env('VAPID_SUBJECT', 'mailto:hello@vaultra.com'),
 
 ];

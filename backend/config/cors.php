@@ -5,7 +5,7 @@
 // restrict cross-origin API access to the known frontend origin(s) only.
 //
 // FRONTEND_URL supports a comma-separated list, e.g.:
-//   FRONTEND_URL=https://charpsdev.vercel.app,https://www.charpsdev.com
+//   FRONTEND_URL=https://vaultra.vercel.app,https://www.vaultra.com
 
 $frontendUrls = array_filter(array_map(
     'trim',
