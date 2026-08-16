@@ -34,9 +34,23 @@ export function useLoginMutation() {
       const response = await api.post<ApiResponse<LoginResponse>>("/login", { email, password });
       return response.data.data;
     },
-    onSuccess: ({ token, user }) => {
-      setSession(token, user);
+    // Must be `async`/awaited (not fire-and-forget): `setSession` returns the
+    // promise for the `POST /api/auth/session` call that actually writes the
+    // HttpOnly session cookie server-side. TanStack Query awaits `onSuccess`
+    // only if it returns a promise — previously this callback called
+    // `setSession` without awaiting/returning it, so `mutateAsync()` (and
+    // therefore `LoginForm`'s `await login(...)`) resolved before the cookie
+    // request had actually completed. That raced against the immediate
+    // `router.push("/dashboard")`: the SSR-aware dashboard layout
+    // (app/(dashboard)/layout.tsx) checks for that exact cookie via
+    // next/headers before rendering, so a fresh login could bounce straight
+    // back to /login if the cookie hadn't landed yet by the time the
+    // /dashboard request went out. Confirmed via a live Playwright repro
+    // against production before this fix (network trace showed the
+    // `/dashboard` request firing before the `/api/auth/session` response).
+    onSuccess: async ({ token, user }) => {
       queryClient.setQueryData(queryKeys.me, user);
+      await setSession(token, user);
     },
   });
 }
