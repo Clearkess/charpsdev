@@ -887,3 +887,52 @@ The checklist's "confirm backend returns JSON 401 (not redirect) when token inva
 - Frontend: SSR-aware auth check specifically for `/dashboard` to remove the client-only `ProtectedRoute` "Loading your workspace..." flash.
 - Frontend: `HttpOnly`/`Secure`/`SameSite=Lax`/`__Host-charpsdev_token` cookie redesign — requires moving the cookie write from the current client-side `document.cookie` (`lib/cookies.ts`) into a Next.js Route Handler, since `HttpOnly` is fundamentally impossible to set from client JS; also requires re-threading `lib/api.ts`'s `Authorization` header source and `authStore.ts`'s session lifecycle.
 - Fix 1 (`/` vs `/dashboard`): investigation already confirmed no redirect conflict exists in code today and `sitemap.ts` already lists `/` at `priority: 1` — this item is effectively a documentation/smoke-test confirmation, not a code change, but the literal smoke-test step hasn't been formally re-run since this deploy.
+
+## 26) Top 3 Critical Fixes — Frontend half of Fix 2 & Fix 3 (committed, not yet deployed to Vercel)
+
+Completes every remaining frontend item from §25's "not yet done" list. Three commits, all pushed to `origin/main`, none yet deployed to Vercel (`charpsdev.vercel.app` is still running the pre-Top-3-Fixes build as of this writing — see the "Vercel deploy" note at the end).
+
+### Fix 3 — `HttpOnly`/`Secure`/`SameSite=Lax`/`__Host-` session cookie (commit `262c824`)
+
+The auth cookie mirror `proxy.ts`'s Edge middleware reads is no longer writable from client JS. New `lib/authCookieNames.ts` centralizes the cookie names (`__Host-charpsdev_token`/`__Host-charpsdev_role` in production, unprefixed in local dev since `__Host-` requires `Secure`, which isn't reliably persisted on plain `http://localhost`). New `app/api/auth/session/route.ts` Route Handler does the actual `Set-Cookie` write (`POST` sets both cookies with `httpOnly: true`, `secure` in prod, `sameSite: "lax"`, `path: "/"`, 7-day max-age; `DELETE` clears them) — `request.cookies.get()` in Edge middleware still reads the raw `Cookie:` header fine regardless of `HttpOnly` (only `document.cookie` is blocked). `lib/cookies.ts` was rewritten to `fetch()` this route instead of touching `document.cookie` directly; `store/authStore.ts`'s `setSession`/`setUser`/`clearSession`/`onRehydrateStorage` now call those fetch-based helpers (fire-and-forget, since Zustand's own `set()` already updates UI state synchronously); `lib/api.ts`'s request interceptor now reads the bearer token from the Zustand store (via a dynamic `import()` to avoid a circular import) instead of the now-invisible-to-JS cookie. The backend's JSON-401-on-bad-token behavior needed no change (already confirmed correct in §25).
+
+Also folded into this commit: the `enabled: isAuthenticated` gates were removed from `useServicesQuery`/`useCategoriesQuery`/`useVirtualProvidersQuery` (prerequisite for the dual-mode pages below), and `/services` was removed from `proxy.ts`'s `PROTECTED_PREFIXES`.
+
+### Fix 2 — dual-mode `/services` and `/virtual-numbers` pages (commit `8c230d6`)
+
+Both routes moved out of `app/(dashboard)/` (whose `layout.tsx` wraps everything in `<ProtectedRoute>`, which renders nothing then redirects anonymous visitors to `/login` — invisible to crawlers) into new top-level routes: `app/services/page.tsx` and `app/virtual-numbers/page.tsx`. Each branches on `useAuth()`'s `{ user, loading }`:
+- **Signed in** (`!loading && user`): renders `AuthenticatedServicesView` / `AuthenticatedVirtualNumbersView` — verbatim extractions of the former `(dashboard)` pages (only the default export renamed, confirmed via diff), wrapped in the same `AppLayout` sidebar/topbar chrome every other authenticated route uses. Zero behavior change for logged-in users.
+- **Anonymous, or still resolving on first paint** (deliberately treated the same as anonymous, since that's exactly what a cookie-less crawler request sees): renders a new public view with the new lightweight `PublicSiteHeader` component:
+  - `PublicServicesView` — a real, indexable catalogue: groups the full `useServicesQuery()`/`useCategoriesQuery()` result set by category (same public hooks the authenticated view uses, so there's no duplicate data-fetching), shows up to 3 sample plans per populated category, with every plan row and both CTA buttons linking to `/register?next=/services` or `/login?next=/services`.
+  - `PublicVirtualNumbersView` — a deliberately lighter teaser: only surfaces `useVirtualProvidersQuery()` (the one free/public virtual-numbers endpoint), not country/service pricing, since those hit live paid 3rd-party APIs and correctly remain auth-gated.
+
+Verified against the live Railway backend (264 active services across 19 populated categories, 2 virtual number providers all confirmed via direct API calls) that both public views have real content to render once deployed; `npx tsc --noEmit` and `npm run build` both pass, and both routes returned `200` in a local smoke test.
+
+### Fix 2 — `robots.ts` / `sitemap.ts` updated to match (commit `dc97c15`)
+
+`/services` and `/virtual-numbers` removed from `app/robots.ts`'s `disallow` list (now that both render real public content) and added to `app/sitemap.ts` with `changeFrequency: "monthly"`, `priority: 0.7` per the checklist. Verified via curl against the local build: neither path appears in `Disallow:` anymore, and both appear in `/sitemap.xml` with the correct priority/changefreq.
+
+### Fix 2 — SSR-aware `/dashboard` auth check (commit `6d6a333`)
+
+`app/(dashboard)/layout.tsx` is a Server Component; it now reads the `HttpOnly` session cookie directly via `next/headers`' `cookies()` before rendering anything:
+- **No cookie at all** → `redirect()` to `/login?next=/dashboard` server-side (belt-and-suspenders alongside `proxy.ts`'s existing Edge-level redirect for the same case).
+- **Cookie present** → renders `<ProtectedRoute skipLoadingScreen>` — a new opt-in prop on `ProtectedRoute` that renders `children` optimistically instead of the blocking "Loading your workspace..." spinner while the client finishes rehydrating Zustand from `localStorage` and confirming the token via `/me`. `ProtectedRoute`'s existing redirect-to-`/login` effect is unchanged and still fires as a safety net for the rare case of a present-but-stale/revoked cookie once `loading` settles with no `user`.
+
+**Manually verified against the live Railway backend** (not just build-time checks): logged in via `POST /api/login` with the seeded `test@example.com` account to obtain a real Sanctum token, `POST`ed it to the local `/api/auth/session` Route Handler to set a real session cookie, then confirmed with curl:
+- No cookie: `/dashboard` → `307` to `/login?next=%2Fdashboard` (unchanged from before this fix).
+- Valid cookie: `/dashboard` → `200`, full `AppLayout` sidebar/nav chrome (`Marketplace dashboard`, all nav items) present in the server-rendered HTML, with **zero** occurrences of "Loading your workspace" in that HTML — confirming the flash is gone for the authenticated case.
+- No regressions: `/`, `/services`, `/virtual-numbers`, `/wallet`, `/orders` all still behave exactly as before.
+- Logged the test session back out via `POST /api/logout` afterward to avoid leaving a live token dangling.
+
+Note: `app/admin/layout.tsx` has the identical `ProtectedRoute` flash but was intentionally left unchanged — the checklist scoped this fix to `/dashboard` specifically. Applying the same `skipLoadingScreen` pattern there would be a small, low-risk follow-up if wanted later.
+
+### Checklist status after this segment
+
+- **Fix 1**: ✅ done (prior segment — no code change needed, confirmed via live curl).
+- **Fix 2**: ✅ all frontend items now complete — public routes (backend, §25), query-hook gating, dual-mode pages, `robots.ts`/`sitemap.ts`, SSR-aware `/dashboard` check, `?next=` preservation (was already correct — confirmed `LoginForm.tsx` reads `searchParams.get("next")` and both new public views' CTAs append it).
+- **Fix 3**: ✅ done — backend (§25) and frontend cookie redesign (this section) both complete.
+
+### Not yet done
+
+- **Deploy to Vercel.** All three commits above are pushed to `origin/main` but not yet live on `charpsdev.vercel.app` — deliberately held until the full checklist above was complete, so the deploy represents one coherent, non-regressive change rather than a partial state.
+- **Full end-to-end smoke test on the deployed site** (login → dashboard → fund wallet → order → refresh, confirming no cookie leaks and no SSR flash in a real browser session) — the checklist's literal final step. What's been verified so far is real but partial: local-server curl tests against the live Railway backend, not a full browser session against the actual Vercel deployment.
