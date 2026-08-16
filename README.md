@@ -932,7 +932,18 @@ Note: `app/admin/layout.tsx` has the identical `ProtectedRoute` flash but was in
 - **Fix 2**: ✅ all frontend items now complete — public routes (backend, §25), query-hook gating, dual-mode pages, `robots.ts`/`sitemap.ts`, SSR-aware `/dashboard` check, `?next=` preservation (was already correct — confirmed `LoginForm.tsx` reads `searchParams.get("next")` and both new public views' CTAs append it).
 - **Fix 3**: ✅ done — backend (§25) and frontend cookie redesign (this section) both complete.
 
-### Not yet done
+### Deployed and verified live on Vercel
 
-- **Deploy to Vercel.** All three commits above are pushed to `origin/main` but not yet live on `charpsdev.vercel.app` — deliberately held until the full checklist above was complete, so the deploy represents one coherent, non-regressive change rather than a partial state.
-- **Full end-to-end smoke test on the deployed site** (login → dashboard → fund wallet → order → refresh, confirming no cookie leaks and no SSR flash in a real browser session) — the checklist's literal final step. What's been verified so far is real but partial: local-server curl tests against the live Railway backend, not a full browser session against the actual Vercel deployment.
+Vercel's GitHub integration auto-deployed all four commits above (`262c824`, `8c230d6`, `dc97c15`, `6d6a333`) to `https://charpsdev.vercel.app` as soon as they were pushed — no manual `vercel deploy` was needed or performed (the sandbox's `VERCEL_TOKEN` is scoped to a different org/SSO scope than this project and can't call the Vercel API directly here, but auto-deploy-on-push made that moot).
+
+Confirmed live via curl and Playwright against the real `charpsdev.vercel.app` domain (not just the local dev server):
+
+- `robots.txt` no longer lists `Disallow: /services` or `Disallow: /virtual-numbers`.
+- `sitemap.xml` has exactly the 5 expected `<url>` entries, including `/services` and `/virtual-numbers` at `priority: 0.7`/`monthly`.
+- `/`, `/services`, `/virtual-numbers` all return `200` for an anonymous request.
+- `/dashboard` for an anonymous request → `307` to `/login?next=%2Fdashboard` (Playwright, fresh cookie-less context, confirmed 0 console errors, final URL correctly the login page).
+- **Authenticated flow, full round-trip against the real deployment:** logged in via `POST https://charpsdev-production.up.railway.app/api/login` with the seeded `test@example.com` account to get a fresh Sanctum token, `POST`ed it to `https://charpsdev.vercel.app/api/auth/session` to set a real session cookie — confirmed the cookie came back `__Host-`-prefixed (only possible over HTTPS with `Secure` and no `Domain` attribute, independently proving Fix 3's cookie hardening is genuinely active in production, not just locally). With that cookie: `/dashboard`, `/wallet`, `/orders`, and `/services` (authenticated branch) all returned `200`, the `/dashboard` HTML contained the full `AppLayout` sidebar/nav chrome ("Marketplace dashboard", `primary-navigation`) with **zero** occurrences of "Loading your workspace" — confirming the SSR-aware flash fix works end-to-end on the actual production deployment, not just the local dev server.
+- Bad/garbage bearer token against `/api/me` → `401 {"message":"Unauthenticated."}` (JSON, not an HTML redirect) — re-confirms the Fix 3 backend behavior noted in §25 still holds.
+- Test session logged back out via `POST /api/logout` afterward; no lingering test cookies or tokens left behind.
+
+**Top-3-Fixes checklist: all three fixes are now fully done, deployed, and verified live.** The only unverified slice of the original "final smoke test" step is the literal wallet-funding → order → refund round trip through a real browser UI session (as opposed to the direct API-level checks above) — everything else in the checklist has a live, verified confirmation.
