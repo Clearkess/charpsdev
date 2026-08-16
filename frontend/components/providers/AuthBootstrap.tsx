@@ -21,10 +21,15 @@ export default function AuthBootstrap({ children }: { children: React.ReactNode 
   useEffect(() => {
     const unsubscribe = onUnauthorized(() => {
       const hadSession = Boolean(useAuthStore.getState().token);
-      clearSession();
-      if (hadSession && typeof window !== "undefined") {
-        router.replace(`/login?next=${encodeURIComponent(window.location.pathname)}`);
-      }
+      // Await the cookie clear before navigating, same reasoning as
+      // useLogoutMutation's onSettled (store/authStore.ts) — otherwise this
+      // router.replace can race ahead of the DELETE /api/auth/session
+      // request and momentarily bounce through a stale-cookie redirect.
+      void clearSession().then(() => {
+        if (hadSession && typeof window !== "undefined") {
+          router.replace(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+        }
+      });
     });
     return unsubscribe;
   }, [clearSession, router]);

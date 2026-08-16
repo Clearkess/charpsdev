@@ -81,8 +81,18 @@ export function useLogoutMutation() {
         }
       }
     },
-    onSettled: () => {
-      clearSession();
+    // Must await clearSession() (see store/authStore.ts) so the DELETE
+    // /api/auth/session cookie-clear actually completes before this
+    // mutation resolves. AppLayout's onClick is `void logout()` (fire-and-
+    // forget from the component's perspective), but the redirect that
+    // matters here isn't a router.push we control directly — it's
+    // ProtectedRoute's own effect reacting to `user` flipping to null,
+    // which fires synchronously as soon as clearSession()'s `set(...)`
+    // runs. Awaiting the cookie clear first prevents that redirect from
+    // racing ahead of the server-side cookie state, mirroring the login
+    // fix in useLoginMutation above (same race, opposite direction).
+    onSettled: async () => {
+      await clearSession();
       queryClient.clear();
     },
   });
