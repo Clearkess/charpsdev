@@ -947,3 +947,70 @@ Confirmed live via curl and Playwright against the real `charpsdev.vercel.app` d
 - Test session logged back out via `POST /api/logout` afterward; no lingering test cookies or tokens left behind.
 
 **Top-3-Fixes checklist: all three fixes are now fully done, deployed, and verified live.** The only unverified slice of the original "final smoke test" step is the literal wallet-funding → order → refund round trip through a real browser UI session (as opposed to the direct API-level checks above) — everything else in the checklist has a live, verified confirmation.
+
+## 27) Final UI Walkthrough — discovered + fixed a login/session-cookie race condition (commit `3d5fe96`)
+
+Ran a real, interactive Playwright-driven browser walkthrough against `https://charpsdev.vercel.app` (login → dashboard → wallet → fund → order → refresh → logout), the one slice of §26's checklist not yet verified through an actual browser UI session. This surfaced a genuine production bug caused indirectly by §26's own SSR-aware `/dashboard` fix.
+
+### Bug found: fresh login could briefly bounce through `/login?next=%2Fdashboard`
+
+A Playwright script with full request/response network tracing against live production caught this sequence on a fresh login:
+
+```
+POST /api/login                         200  (Railway)
+POST /api/auth/session                  ...  (cookie write starts)
+GET  /dashboard?_rsc=...                     (navigation fires FIRST — too early)
+RESP /api/auth/session                  200  (cookie write finishes, but too late)
+307  /dashboard → /login?next=%2Fdashboard   (SSR check saw no cookie yet)
+GET  /login?next=%2Fdashboard
+GET  /dashboard                              (second attempt — cookie now present, succeeds)
+```
+
+**Root cause**: `hooks/queries/useAuthQueries.ts`'s `useLoginMutation` called `setSession(token, user)` inside `onSuccess` without awaiting/returning its promise. `setSession` (in `store/authStore.ts`) itself calls `setSessionCookie`, which does a `fetch()` `POST` to `/api/auth/session` — the Route Handler that actually performs the `Set-Cookie`. TanStack Query only awaits an `onSuccess` callback if that callback itself returns a promise, so `mutateAsync()` (and therefore `LoginForm.tsx`'s `await login(...)`) resolved *before* the cookie request had actually completed. `LoginForm`'s immediate follow-up `router.push(next || "/dashboard")` then raced ahead of the cookie landing. This was **latent** before §26's `app/(dashboard)/layout.tsx` SSR check existed — the old client-only `ProtectedRoute` never depended on the cookie being present synchronously — and only became visible once that Server Component started checking `next/headers`' `cookies()` before rendering.
+
+**Fix**: made `onSuccess` `async` and added `await setSession(token, user)`, so the mutation (and the subsequent navigation) can't resolve until the cookie write has genuinely completed.
+
+```ts
+onSuccess: async ({ token, user }) => {
+  queryClient.setQueryData(queryKeys.me, user);
+  await setSession(token, user);
+},
+```
+
+Verified `npx tsc --noEmit` clean and `npm run build` succeeds (hooks-only change, route list unchanged) before pushing. Local re-verification against `http://localhost:3000` (pointed at the live Railway API via a gitignored `.env.local` override) was attempted but abandoned: `backend/config/cors.php` hardcodes `Access-Control-Allow-Origin` to the `FRONTEND_URL` env var (`https://charpsdev.vercel.app` only, `supports_credentials: false`), so a real browser request from `localhost:3000` gets its `/api/login` response blocked by CORS (confirmed via `curl -H "Origin: http://localhost:3000"`, which showed `access-control-allow-origin: https://charpsdev.vercel.app` regardless of the request's actual origin — `curl` itself ignores CORS, but a browser wouldn't). Pushed the fix and re-verified directly against production instead, consistent with how every other fix in this project has ultimately been confirmed.
+
+Pushed as commit `3d5fe96`; Vercel's GitHub-integration auto-deploy picked it up automatically (confirmed live within roughly a minute of the push, same as every prior commit in §26).
+
+**Post-fix live re-verification** (same Playwright network-trace script, same production domain): login now navigates straight to `/dashboard` in one shot —
+
+```
+POST /api/login                200
+POST /api/auth/session         200   (resolves BEFORE the next request)
+GET  /dashboard?_rsc=...       200   (fires only after the cookie write completed)
+```
+
+Zero occurrences of the `/login?next=...` bounce, zero occurrences of "Loading your workspace" in the rendered HTML.
+
+### Full UI walkthrough (real browser, real production, real seeded test account)
+
+Continued past the login fix with the rest of the requested walkthrough, driven end-to-end through actual clicks/form-fills (not direct API calls) against `https://charpsdev.vercel.app`, using the seeded `test@example.com` / `password` account (user id 7, starting wallet balance ₦68,400.00):
+
+1. **Login** → lands directly on `/dashboard`, no flash, no bounce (see above).
+2. **Dashboard** → renders correctly, `<h1>Dashboard</h1>`, full `AppLayout` chrome, wallet balance visible.
+3. **Wallet page** (`/wallet`) → balance card correctly shows `₦68,400.00`.
+4. **Fund wallet** → submitted the "Initialize payment" form for ₦500; received a real Paystack `authorization_url` (`https://checkout.paystack.com/...`) in the response — confirms the flow works end-to-end without ever completing/confirming a real charge.
+5. **Services** (`/services`, authenticated view) → searched for "Outlook Trusted", clicked the matching "Add to cart" button for service id `277` ("Outlook Trusted - OAuth2 [Graph] Live 12 - 36 Months", ₦324 — the cheapest active service on the platform).
+6. **Cart** (`/cart`) → item present (₦324 subtotal/total), clicked **Checkout**, which redirected to `/orders?placed=21` — a real order (id 21, reference `ORD-TB2YQQPVXZ`) was placed through the real UI.
+7. **Order resolution** → confirmed via a follow-up API check (`GET /api/orders/21`): status `failed`, with `details.provider_router` showing the upstream Easylogs provider rejected the line item (`"message": "Insufficient wallet balance."` — the *provider's* own float, not the customer's CharpsDev wallet). The wallet transactions endpoint shows the expected debit/credit pair: a `purchase` transaction for ₦324 (`ORD-TB2YQQPVXZ`) immediately followed by a `refund` transaction for the same ₦324 (`ORD-TB2YQQPVXZ-REFUND`, `"Refund: order ORD-TB2YQQPVXZ (provider rejected the order (rejected))"`) — the auto-refund-on-provider-rejection logic (already confirmed once via direct API calls in a prior segment) now also confirmed working through the actual checkout UI.
+8. **Wallet balance re-check** → `/wallet` still shows `₦68,400.00` after the order — net zero impact, exactly as expected.
+9. **Refresh test** → reloaded `/wallet` mid-session: URL stayed on `/wallet` (no redirect to `/login`), zero occurrences of "Loading your workspace" in the reloaded HTML — confirms the SSR-aware auth check and cookie persist correctly across a hard refresh with no flash or session loss.
+10. **Logout** → clicked the sidebar "Logout" button, confirmed redirect to `/login?next=%2Fdashboard` (the current route's protected-route redirect, expected behavior for a just-logged-out session on a page that requires auth).
+11. **Cleanup** → separately logged the API-level test session out via `POST /api/logout` (`200 {"message":"Logged out successfully."}`) to invalidate the token used for the order/transaction verification checks, and deleted all throwaway Playwright scripts under `/tmp/e2e_walkthrough/` (never part of the git repo).
+
+### Final status
+
+- **Fix 1, Fix 2, Fix 3**: ✅ all previously confirmed done and live (§25/§26).
+- **Login race condition**: ✅ found, root-caused, fixed, pushed (`3d5fe96`), deployed, and re-verified live — a real bug caught only because this walkthrough used an actual interactive browser session instead of direct API calls.
+- **Final UI walkthrough**: ✅ complete — login, dashboard, wallet view, fund-wallet (Paystack init), add-to-cart, checkout/order placement, order-resolution/auto-refund, post-order refresh, and logout all verified end-to-end through the real production UI with no unexpected behavior. Wallet balance unchanged at ₦68,400.00 after the full round trip, as expected.
+
+Note: `frontend/.env.local` (gitignored, `NEXT_PUBLIC_API_URL=https://charpsdev-production.up.railway.app/api`) remains in the sandbox's local working tree from the local-verification attempt above — harmless since it's gitignored and never committed, kept in case further local-against-production debugging is needed later.
