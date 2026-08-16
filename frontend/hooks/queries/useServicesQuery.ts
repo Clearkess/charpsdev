@@ -3,16 +3,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
-import { useAuthStore } from "@/store/authStore";
 import type { Service } from "@/types/api";
 
 /**
  * Lists active services, optionally filtered to a single category.
  * Pass `null`/`undefined` for `categoryId` to fetch the full catalog.
+ *
+ * `GET /services` is a public, read-only endpoint (see backend
+ * routes/api.php — Top-3-Fixes Fix 2), so this intentionally fetches
+ * regardless of auth state: the `/services` page now renders a real
+ * public catalogue for anonymous visitors/crawlers, not just logged-in
+ * users.
  */
 export function useServicesQuery(categoryId?: number | null) {
-  const isAuthenticated = useAuthStore((state) => Boolean(state.token));
-
   return useQuery({
     queryKey: queryKeys.servicesByCategory(categoryId ?? null),
     queryFn: async () => {
@@ -21,6 +24,5 @@ export function useServicesQuery(categoryId?: number | null) {
       });
       return response.data.services;
     },
-    enabled: isAuthenticated,
   });
 }

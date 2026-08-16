@@ -13,17 +13,22 @@ import type {
   VirtualNumberServiceOption,
 } from "@/types/api";
 
-/** Active, credentialed providers for this feature (provider-scoped browsing: pick one of these first). */
+/**
+ * Active, credentialed providers for this feature (provider-scoped
+ * browsing: pick one of these first). `GET /virtual-numbers/providers`
+ * is a public, read-only DB lookup with no third-party cost (see backend
+ * routes/api.php — Top-3-Fixes Fix 2), so this fetches regardless of
+ * auth state to support the public `/virtual-numbers` teaser. Country
+ * and service lookups below stay auth-gated since they hit live, paid
+ * 3rd-party APIs.
+ */
 export function useVirtualProvidersQuery() {
-  const isAuthenticated = useAuthStore((state) => Boolean(state.token));
-
   return useQuery({
     queryKey: queryKeys.virtualNumberProviders,
     queryFn: async () => {
       const response = await api.get<ApiResponse<VirtualNumberProviderOption[]>>("/virtual-numbers/providers");
       return response.data.data;
     },
-    enabled: isAuthenticated,
   });
 }
 

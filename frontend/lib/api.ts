@@ -1,6 +1,5 @@
 import axios, { AxiosError } from "axios";
 import { API_URL } from "@/lib/constants";
-import { getTokenCookie } from "@/lib/cookies";
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -20,9 +19,20 @@ export function setAuthToken(token: string | null) {
 
 // Keep every request's Authorization header in sync with the persisted token,
 // even across tabs/reloads, without relying on render order of providers.
-api.interceptors.request.use((config) => {
-  if (!config.headers?.Authorization) {
-    const token = typeof window !== "undefined" ? getTokenCookie() : null;
+//
+// Fallback token source: the Zustand auth store (persisted to localStorage),
+// not a cookie. Previously this read a mirrored `document.cookie` value,
+// but that cookie is now HttpOnly (Top-3-Fixes, Fix 3) and therefore
+// invisible to client JS by design — the store's `token` field is the
+// actual source of truth for the bearer token on the client regardless.
+// Imported lazily inside the interceptor (dynamic `import()`, not a
+// top-level import) to avoid a circular import, since store/authStore.ts
+// itself imports `setAuthToken` from this file. Axios request interceptors
+// support returning a Promise, so this stays fully type-safe (no `require`).
+api.interceptors.request.use(async (config) => {
+  if (!config.headers?.Authorization && typeof window !== "undefined") {
+    const { useAuthStore } = await import("@/store/authStore");
+    const token = useAuthStore.getState().token;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

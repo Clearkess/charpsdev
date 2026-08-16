@@ -1,42 +1,42 @@
-export const TOKEN_COOKIE = "charpsdev_token";
-export const ROLE_COOKIE = "charpsdev_role";
+/**
+ * Client-side helpers for the server-set session cookie (Top-3-Fixes,
+ * Fix 3). These no longer touch `document.cookie` directly — the cookie
+ * itself is `HttpOnly` (set via `Set-Cookie` by
+ * `app/api/auth/session/route.ts`) and therefore invisible to client JS by
+ * design. Callers just POST/DELETE to that route; the browser handles
+ * storing/sending the resulting cookie automatically.
+ *
+ * Nothing in the app reads this cookie back on the client (confirmed: no
+ * callers of a `getTokenCookie`/`getRoleCookie`-style read exist outside
+ * this file previously, and the token itself lives in the Zustand store —
+ * see store/authStore.ts and lib/api.ts). The only reader is `proxy.ts`'s
+ * Edge middleware, which reads the raw `Cookie:` request header
+ * server-side — a path `HttpOnly` does not affect.
+ *
+ * Both calls are best-effort: if they fail (e.g. offline), the client-side
+ * Zustand session still updates normally so the app keeps working; only the
+ * Edge middleware's redirect behavior would be stale until the next
+ * successful call.
+ */
 
-const SEVEN_DAYS = 60 * 60 * 24 * 7;
-
-function readCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-function writeCookie(name: string, value: string | null, maxAge = SEVEN_DAYS) {
-  if (typeof document === "undefined") return;
-  if (!value) {
-    document.cookie = `${name}=; path=/; max-age=0; samesite=lax`;
-    return;
+/** Mirrors the Sanctum token into an HttpOnly session cookie so proxy.ts can see auth state at the edge. */
+export async function setSessionCookie(token: string, isAdmin: boolean | null | undefined): Promise<void> {
+  try {
+    await fetch("/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, isAdmin: Boolean(isAdmin) }),
+    });
+  } catch {
+    // Best-effort — see file header.
   }
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; samesite=lax`;
 }
 
-/** Sanctum bearer token, mirrored into a cookie only so the Next.js middleware can see auth state at the edge. */
-export function setTokenCookie(token: string | null) {
-  writeCookie(TOKEN_COOKIE, token);
-}
-
-export function getTokenCookie(): string | null {
-  return readCookie(TOKEN_COOKIE);
-}
-
-/** Role hint ("admin" | "user") mirrored into a cookie so middleware can gate /admin/* without an extra request. */
-export function setRoleCookie(isAdmin: boolean | null | undefined) {
-  writeCookie(ROLE_COOKIE, isAdmin ? "admin" : "user");
-}
-
-export function getRoleCookie(): string | null {
-  return readCookie(ROLE_COOKIE);
-}
-
-export function clearAuthCookies() {
-  writeCookie(TOKEN_COOKIE, null);
-  writeCookie(ROLE_COOKIE, null);
+/** Clears the HttpOnly session cookie (logout / session expiry). */
+export async function clearSessionCookie(): Promise<void> {
+  try {
+    await fetch("/api/auth/session", { method: "DELETE" });
+  } catch {
+    // Best-effort — see file header.
+  }
 }
