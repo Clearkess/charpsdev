@@ -17,6 +17,15 @@ import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/uiStore";
 import type { Service } from "@/types/api";
 
+/**
+ * The full cart-integrated Services experience for logged-in users.
+ * Extracted verbatim from the former app/(dashboard)/services/page.tsx so
+ * ServicesPageClient can render this for authenticated visitors while
+ * rendering a separate public, SEO-friendly catalogue (see
+ * PublicServicesView.tsx) for anonymous visitors/crawlers at the same
+ * `/services` URL (Top-3-Fixes, Fix 2).
+ */
+
 /** How many active services to surface in the "Featured Services" banner. */
 const FEATURED_COUNT = 6;
 
@@ -194,7 +203,7 @@ function ServiceCard({
   );
 }
 
-export default function ServicesPage() {
+export default function AuthenticatedServicesView() {
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const categories = useCategoriesQuery();
   const { data, isPending, error } = useServicesQuery(categoryId);

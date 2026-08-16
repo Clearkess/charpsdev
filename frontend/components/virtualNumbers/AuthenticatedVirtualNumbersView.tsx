@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * The full country/service-selection + rental experience for logged-in
+ * users. Extracted verbatim from the former
+ * app/(dashboard)/virtual-numbers/page.tsx so app/virtual-numbers/page.tsx
+ * can render this for authenticated visitors while rendering a separate,
+ * lighter public teaser (see PublicVirtualNumbersView.tsx) for anonymous
+ * visitors/crawlers at the same `/virtual-numbers` URL (Top-3-Fixes, Fix 2).
+ */
+
 import { useMemo, useState } from "react";
 import {
   CopyIcon,
@@ -179,7 +188,7 @@ function OrderCard({ order }: { order: VirtualNumberOrder }) {
   );
 }
 
-export default function VirtualNumbersPage() {
+export default function AuthenticatedVirtualNumbersView() {
   const providers = useVirtualProvidersQuery();
   const [providerSlug, setProviderSlug] = useState<string | null>(null);
   const [country, setCountry] = useState<string | null>(null);
