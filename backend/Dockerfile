@@ -56,10 +56,19 @@ RUN composer dump-autoload --optimize --no-dev \
 # cache, compiled config/routes here) — Render's filesystem is ephemeral
 # per-deploy but writable at runtime, which is all Laravel needs since this
 # app has no user file uploads (grepped app/ for Storage::/->store(), none).
-RUN chmod -R 775 storage bootstrap/cache
+#
+# Also explicitly chmod +x start.sh: it was added to the repo via GitHub's
+# "Create new file" web UI (not a local `git add`), which does not preserve
+# the executable bit, so `./start.sh` at runtime fails with "Permission
+# denied" (exit 126) unless this is set here at build time instead.
+RUN chmod -R 775 storage bootstrap/cache \
+    && chmod +x start.sh
 
 EXPOSE 8080
 
 # start.sh runs migrations then boots the server — see start.sh in this same
 # directory for why this is a separate script instead of inlined here.
-CMD ["./start.sh"]
+# Invoked via `sh` explicitly (not `["./start.sh"]`) as a second safety net
+# against the exec-bit issue above — this form only needs start.sh to be
+# *readable*, not executable, to run.
+CMD ["sh", "./start.sh"]
