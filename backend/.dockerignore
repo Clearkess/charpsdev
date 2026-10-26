@@ -1,0 +1,17 @@
+# Keep the Docker build context (and resulting image layers) small, and
+# critically, keep local secrets/dev-only files out of the image entirely.
+vendor/
+node_modules/
+.env
+.env.backup
+.env.production
+database/database.sqlite
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+.git/
+.github/
+tests/
+*.log
+.DS_Store
