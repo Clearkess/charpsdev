@@ -1,0 +1,113 @@
+# Render Blueprint for the Vaultra backend (Laravel API).
+#
+# Single web service + managed Postgres -- no worker/cron service needed
+# (checked app/Jobs/ and routes/console.php: no queued jobs, no
+# ->schedule() calls, everything in this app runs synchronously per-request).
+#
+# How to use: push this file to the repo, then in the Render dashboard choose
+# "New +" -> "Blueprint" and point it at this repo/branch. Render reads this
+# file and provisions both resources together. Secrets (marked `sync: false`
+# below) must be filled in manually in the Render dashboard after the first
+# apply -- they are intentionally NOT committed to git.
+databases:
+  - name: vaultra-db
+    plan: free
+    databaseName: vaultra
+    user: vaultra
+
+services:
+  - type: web
+    name: vaultra-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /up
+    envVars:
+      - key: APP_NAME
+        value: Vaultra
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        sync: false # generate with `php artisan key:generate --show`, paste as base64:...
+      - key: APP_URL
+        fromService:
+          type: web
+          name: vaultra-backend
+          property: host
+          # Render sets this to the bare host (no scheme); if APP_URL needs
+          # the full https:// URL for asset generation, override manually
+          # with the Render-assigned https://vaultra-backend.onrender.com.
+
+      # Comma-separated list of frontend origin(s) allowed to call /api/*
+      # (CORS). See config/cors.php. Set this to the real Vercel domain,
+      # e.g. https://charpsdev.vercel.app (and append any custom domain
+      # added later, comma-separated).
+      - key: FRONTEND_URL
+        sync: false
+
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromDatabase:
+          name: vaultra-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: vaultra-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: vaultra-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: vaultra-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: vaultra-db
+          property: password
+
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: SESSION_DRIVER
+        value: database
+      - key: SESSION_LIFETIME
+        value: "120"
+
+      - key: MAIL_MAILER
+        value: log
+      - key: MAIL_FROM_ADDRESS
+        value: hello@vaultra.com
+      - key: MAIL_FROM_NAME
+        value: Vaultra
+
+      # Paystack: live or test keys, set manually in the Render dashboard.
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PAYMENT_URL
+        value: https://api.paystack.co
+
+      # Web push (VAPID): generate a fresh keypair for this deployment --
+      # see backend/README (or the Vaultra rebrand README section) for the
+      # one-liner using minishlink/web-push's VAPID::createVapidKeys().
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: "mailto:hello@vaultra.com"
+
+      # Provider Router: Easylogs Marketplace delivery webhook signature
+      # check only -- base URL/API token live on the `providers` DB row
+      # (Admin > Providers), set after first login, not as an env var.
+      - key: EASYLOGS_WEBHOOK_SECRET
+        sync: false
+        
