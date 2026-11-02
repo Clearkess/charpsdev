@@ -26,7 +26,7 @@ class PaymentController extends Controller
                 'amount' => (int) round($request->amount * 100),
                 'currency' => 'NGN',
                 'reference' => Str::uuid()->toString(),
-                'callback_url' => config('app.url') . '/api/payment/callback',
+                'callback_url' => 'https://charpsdev.vercel.app/payment/callback',,
                 'metadata' => [
                     'user_id' => $request->user()->id,
                 ],
