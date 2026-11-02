@@ -88,10 +88,17 @@ class PaymentController extends Controller
 
     public function callback(Request $request)
     {
-        return response()->json([
-            'success' => true,
-            'message' => 'Payment completed. Verifying transaction...',
-        ]);
+        // Paystack redirects the browser here after checkout. Keep verification
+        // in the authenticated API endpoint; this public route only forwards
+        // the reference to the frontend result page.
+        $frontendUrl = rtrim((string) (config('cors.allowed_origins.0') ?: config('app.url')), '/');
+        $reference = trim((string) $request->query('reference', ''));
+
+        if ($reference === '') {
+            return redirect()->away($frontendUrl . '/payment/callback?status=missing_reference');
+        }
+
+        return redirect()->away($frontendUrl . '/payment/callback?reference=' . rawurlencode($reference));
     }
 
     public function webhook(Request $request, NotificationService $notifications)
