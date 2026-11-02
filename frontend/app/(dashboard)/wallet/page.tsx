@@ -41,7 +41,20 @@ export default function WalletPage() {
     try {
       const response = await initializePayment.mutateAsync(Number(amount));
       const authUrl = response.data?.authorization_url;
-      setFundingMessage(authUrl ? `Authorization URL received: ${authUrl}` : response.message || "Payment initialized.");
+
+      if (!authUrl) {
+        setFundingMessage(response.message || "Payment initialized, but no checkout URL was returned.");
+        return;
+      }
+
+      // Only redirect to Paystack's hosted checkout. Never navigate to an
+      // arbitrary URL returned by an API response.
+      const checkoutUrl = new URL(authUrl);
+      if (checkoutUrl.protocol !== "https:" || checkoutUrl.hostname !== "checkout.paystack.com") {
+        throw new Error("Paystack returned an invalid checkout URL. Please contact support.");
+      }
+
+      window.location.assign(checkoutUrl.toString());
     } catch (error) {
       setFundingMessage(extractErrorMessage(error, "Failed to initialize payment."));
     }
