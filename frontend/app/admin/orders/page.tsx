@@ -216,9 +216,132 @@ export default function AdminOrdersPage() {
         </p>
       </div>
       {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-      <Card>
-        <CardContent>
-          <DataTable
+      {/* Mobile-friendly order cards */}
+<div className="space-y-3 md:hidden">
+  {orders.data.data.map((order) => {
+    const isBusy =
+      updateOrder.isPending && pendingOrderId === order.id;
+
+    return (
+      <Card key={order.id}>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap justify-between gap-2">
+            <div>
+              <p className="font-semibold">
+                {order.reference || `#${order.id}`}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {order.user?.name || "Customer"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {order.user?.email}
+              </p>
+            </div>
+            <Badge variant={statusVariant(order.status)}>
+              {order.status}
+            </Badge>
+          </div>
+
+          <div className="text-lg font-bold">
+            {formatCurrency(order.amount ?? order.price)}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Update order status
+            </label>
+            <select
+              value={order.status}
+              disabled={isBusy}
+              onChange={(event) =>
+                void onStatusChange(
+                  order,
+                  event.target.value as OrderStatus
+                )
+              }
+              className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Delivery information</p>
+
+            {deliveringOrderId === order.id ? (
+              <>
+                <textarea
+                  value={deliveryDraft}
+                  onChange={(e) => setDeliveryDraft(e.target.value)}
+                  placeholder="Enter license key, PIN, download link or delivery details..."
+                  rows={4}
+                  className="w-full rounded-lg border border-input bg-background p-3 text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1"
+                    disabled={isBusy || !deliveryDraft.trim()}
+                    onClick={() => void saveDelivery(order)}
+                  >
+                    {isBusy ? "Sending..." : "Save & notify"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={cancelDelivery}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {order.delivery_content || "Not delivered yet"}
+                </p>
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => startDelivery(order)}
+                >
+                  {order.delivery_content
+                    ? "Edit delivery information"
+                    : "Add delivery information"}
+                </Button>
+              </>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Created: {formatDate(order.created_at)}
+          </p>
+        </CardContent>
+      </Card>
+    );
+  })}
+</div>
+
+{/* Existing desktop order table */}
+<div className="hidden md:block">
+  <Card>
+    <CardContent>
+      <DataTable
+        columns={columns}
+        data={orders.data.data}
+        isFetching={orders.isFetching}
+        pagination={{
+          page: orders.data.current_page,
+          lastPage: orders.data.last_page,
+          total: orders.data.total,
+          onPageChange: setPage,
+        }}
+      />
+    </CardContent>
+  </Card>
+</div>
             columns={columns}
             data={orders.data.data}
             isFetching={orders.isFetching}
