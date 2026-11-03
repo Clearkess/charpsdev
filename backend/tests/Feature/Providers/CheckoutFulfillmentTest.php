@@ -9,8 +9,8 @@ use App\Models\Service;
 use App\Models\ServiceProviderRoute;
 use App\Models\User;
 use App\Models\Wallet;
-use App\Services\FulfillmentProviders\FulfillmentAdapterResolver;
 use App\Services\FulfillmentProviders\FulfillmentErrorType;
+use App\Services\FulfillmentProviders\MockFulfillmentProvider;
 use App\Services\FulfillmentProviders\FulfillmentException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -193,17 +193,24 @@ class CheckoutFulfillmentTest extends TestCase
         $response->assertJsonPath('success', false);
     }
 
-    public function test_mock_provider_is_rejected_in_production(): void
+    public function test_mock_provider_cannot_claim_delivery_in_production(): void
     {
-        $provider = $this->makeProvider('success');
+        $provider = new Provider([
+            'slug' => 'unimplemented-provider',
+            'api_key' => 'mock:success',
+            'base_url' => '',
+        ]);
+        $adapter = new MockFulfillmentProvider('mock:success');
         $this->app['env'] = 'production';
 
         try {
-            FulfillmentAdapterResolver::resolve($provider);
-            $this->fail('A mock provider must not be resolved in production.');
+            $adapter->fulfill(['reference' => 'ORD-TEST']);
+            $this->fail('A mock provider must not complete an order in production.');
         } catch (FulfillmentException $exception) {
             $this->assertSame(FulfillmentErrorType::Ambiguous, $exception->errorType);
         }
+
+        $this->assertSame('pending', $adapter->checkStatus('ORD-TEST')['status']);
     }
 
 }
