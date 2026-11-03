@@ -1,0 +1,61 @@
+name: Promote existing user to admin
+
+on:
+  workflow_dispatch:
+    inputs:
+      admin_email:
+        description: "Exact email address of the existing account to promote"
+        required: true
+        type: string
+      confirm:
+        description: "Type PROMOTE to confirm this one-time action"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-admin-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: ${{ inputs.confirm == 'PROMOTE' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      APP_ENV: production
+      APP_KEY: ${{ secrets.LARAVEL_APP_KEY }}
+      DB_CONNECTION: pgsql
+      DB_URL: ${{ secrets.NEON_DATABASE_URL }}
+      DB_SSLMODE: require
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@v4
+
+      - name: Set up PHP and PostgreSQL extension
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, pdo_pgsql, pgsql
+          coverage: none
+
+      - name: Install production dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress --no-dev --optimize-autoloader
+
+      - name: Verify the promotion command exists
+        run: |
+          php artisan list --raw | grep -Fx 'user:make-admin' >/dev/null
+
+      - name: Promote the specified existing account
+        env:
+          ADMIN_EMAIL: ${{ inputs.admin_email }}
+        run: |
+          if [ -z "$ADMIN_EMAIL" ]; then
+            echo "An account email is required."
+            exit 1
+          fi
+          php artisan user:make-admin "$ADMIN_EMAIL" --no-interaction
