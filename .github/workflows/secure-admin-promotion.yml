@@ -48,7 +48,7 @@ jobs:
 
       - name: Verify the promotion command exists
         run: |
-          php artisan list --raw | grep -Fx 'user:make-admin' >/dev/null
+          php artisan list --raw | grep -F 'user:make-admin' >/dev/null
 
       - name: Promote the specified existing account
         env:
