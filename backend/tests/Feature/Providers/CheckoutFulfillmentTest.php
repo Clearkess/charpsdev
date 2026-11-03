@@ -9,6 +9,9 @@ use App\Models\Service;
 use App\Models\ServiceProviderRoute;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Services\FulfillmentProviders\FulfillmentErrorType;
+use App\Services\FulfillmentProviders\MockFulfillmentProvider;
+use App\Services\FulfillmentProviders\FulfillmentException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -160,4 +163,54 @@ class CheckoutFulfillmentTest extends TestCase
         $response->assertJsonPath('data.status', 'pending');
         $this->assertSame(9500.0, (float) $user->wallet->fresh()->balance);
     }
+    public function test_second_checkout_cannot_charge_the_same_cart_twice(): void
+    {
+        $user = $this->makeUserWithWallet(10000);
+        $service = $this->makeService(500);
+        CartItem::create(['user_id' => $user->id, 'service_id' => $service->id, 'quantity' => 1]);
+
+        $first = $this->actingAs($user)->postJson('/api/checkout', []);
+        $first->assertStatus(201);
+
+        $second = $this->actingAs($user)->postJson('/api/checkout', []);
+        $second->assertStatus(422);
+        $second->assertJsonPath('message', 'Your cart is empty.');
+
+        $this->assertSame(9500.0, (float) $user->wallet->fresh()->balance);
+        $this->assertSame(1, Order::where('user_id', $user->id)->count());
+    }
+
+    public function test_legacy_direct_order_endpoint_is_disabled(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson('/api/orders', [
+            'service_id' => 1,
+            'quantity' => 1,
+        ]);
+
+        $response->assertStatus(410);
+        $response->assertJsonPath('success', false);
+    }
+
+    public function test_mock_provider_cannot_claim_delivery_in_production(): void
+    {
+        $provider = new Provider([
+            'slug' => 'unimplemented-provider',
+            'api_key' => 'mock:success',
+            'base_url' => '',
+        ]);
+        $adapter = new MockFulfillmentProvider('mock:success');
+        $this->app['env'] = 'production';
+
+        try {
+            $adapter->fulfill(['reference' => 'ORD-TEST']);
+            $this->fail('A mock provider must not complete an order in production.');
+        } catch (FulfillmentException $exception) {
+            $this->assertSame(FulfillmentErrorType::Ambiguous, $exception->errorType);
+        }
+
+        $this->assertSame('pending', $adapter->checkStatus('ORD-TEST')['status']);
+    }
+
 }

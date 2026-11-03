@@ -1,20 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PackageCheckIcon, RepeatIcon, ShoppingCartIcon, StarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyBlock, ErrorBlock, TableSkeleton } from "@/components/common/StateBlock";
 import ReviewFormRow from "@/components/common/ReviewFormRow";
 import { useAddToCartMutation } from "@/hooks/queries/useCartQueries";
-import { useCreateOrderMutation, useOrdersQuery } from "@/hooks/queries/useOrdersQueries";
-import { useServicesQuery } from "@/hooks/queries/useServicesQuery";
+import { useOrdersQuery } from "@/hooks/queries/useOrdersQueries";
 import { extractErrorMessage } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Order } from "@/types/api";
@@ -45,15 +43,10 @@ function orderLines(order: Order): Array<{ service_id: number; quantity: number;
 export default function OrdersPage() {
   const router = useRouter();
   const orders = useOrdersQuery();
-  const services = useServicesQuery();
-  const createOrder = useCreateOrderMutation();
   const addToCart = useAddToCartMutation();
   const searchParams = useSearchParams();
   const placedOrderId = searchParams.get("placed");
   const highlightRef = searchParams.get("ref");
-  const [serviceId, setServiceId] = useState("");
-  const [quantity, setQuantity] = useState("1");
-  const [message, setMessage] = useState<string | null>(null);
   const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<number>>(new Set());
   const [expandedReviewIds, setExpandedReviewIds] = useState<Set<number>>(new Set());
@@ -111,25 +104,10 @@ export default function OrdersPage() {
     // until the table has actually rendered past the loading skeleton).
   }, [highlightRef, orders.data]);
 
-  const firstServiceId = useMemo(() => services.data?.[0]?.id?.toString() || "", [services.data]);
-  const selectedServiceId = serviceId || firstServiceId;
-
-  if (orders.isPending || services.isPending) return <TableSkeleton rows={4} cols={5} />;
-  if (orders.error || services.error) {
-    return <ErrorBlock message={extractErrorMessage(orders.error || services.error, "Order request failed.")} />;
+  if (orders.isPending) return <TableSkeleton rows={4} cols={5} />;
+  if (orders.error) {
+    return <ErrorBlock message={extractErrorMessage(orders.error, "Order request failed.")} />;
   }
-
-  const onCreateOrder = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!selectedServiceId) return;
-    setMessage(null);
-    try {
-      const response = await createOrder.mutateAsync({ service_id: Number(selectedServiceId), quantity: Number(quantity) });
-      setMessage(response.message || `Order #${response.data.id} created.`);
-    } catch (error) {
-      setMessage(extractErrorMessage(error, "Failed to create order."));
-    }
-  };
 
   const rows = orders.data?.data || [];
 
@@ -138,7 +116,7 @@ export default function OrdersPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-3xl font-bold">Orders</h1>
-          <p className="mt-2 text-muted-foreground">Create new orders and track their status.</p>
+          <p className="mt-2 text-muted-foreground">Track your purchases, delivery status, and order history.</p>
         </div>
         <Button render={<Link href="/cart" />} variant="outline" size="sm">
           <ShoppingCartIcon data-icon="inline-start" aria-hidden="true" />
@@ -155,38 +133,10 @@ export default function OrdersPage() {
           Showing order <span className="font-mono font-medium">{highlightRef}</span> from your wallet transaction, highlighted below.
         </div>
       ) : null}
-      <Card>
-        <CardHeader>
-          <CardTitle>Create order</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onCreateOrder} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <select
-                value={selectedServiceId}
-                onChange={(e) => setServiceId(e.target.value)}
-                aria-label="Service"
-                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-              >
-                {services.data?.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name}
-                  </option>
-                ))}
-              </select>
-              <Input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} aria-label="Quantity" />
-            </div>
-            <Button type="submit" disabled={createOrder.isPending || !selectedServiceId}>
-              {createOrder.isPending ? "Creating..." : "Create order"}
-            </Button>
-            {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-          </form>
-        </CardContent>
-      </Card>
       {!rows.length ? (
         <EmptyBlock
           title="No orders yet"
-          description="Create your first order above, or browse the marketplace to see what's available."
+          description="Browse the marketplace, add services to your cart, and complete checkout with your wallet."
           icon={ShoppingCartIcon}
           action={
             <Button render={<Link href="/services" prefetch={false} />} variant="outline" size="sm">

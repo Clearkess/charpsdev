@@ -48,26 +48,6 @@ class CheckoutController extends Controller
     {
         $userId = $request->user()->id;
 
-        $cartItems = CartItem::with('service')
-            ->where('user_id', $userId)
-            ->get();
-
-        if ($cartItems->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Your cart is empty.',
-            ], 422);
-        }
-
-        foreach ($cartItems as $item) {
-            if (! $item->service || ! $item->service->active) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "\"{$item->service?->name}\" is no longer available. Please remove it from your cart.",
-                ], 422);
-            }
-        }
-
         $couponCode = $request->filled('coupon_code') ? Str::upper(trim($request->input('coupon_code'))) : null;
 
         // Phase 6 (more notification triggers): populated (by reference)
@@ -78,18 +58,47 @@ class CheckoutController extends Controller
         $lowStockAlerts = [];
 
         try {
-            $order = DB::transaction(function () use ($cartItems, $userId, $couponCode, &$lowStockAlerts) {
+            $order = DB::transaction(function () use ($userId, $couponCode, &$lowStockAlerts) {
+                // Serialize checkouts for this user before reading their cart.
+                // A second checkout waits, then sees the first checkout's
+                // committed cart deletion instead of charging the same items.
+                User::query()->whereKey($userId)->lockForUpdate()->firstOrFail();
+
+                // Read and lock the current cart inside the same transaction
+                // that debits the wallet. Never trust a cart snapshot loaded
+                // before the transaction began.
+                $cartItems = CartItem::query()
+                    ->where('user_id', $userId)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($cartItems->isEmpty()) {
+                    throw ValidationException::withMessages([
+                        'cart' => 'Your cart is empty.',
+                    ]);
+                }
+
+                $cartItemIds = $cartItems->modelKeys();
+
                 // Lock every affected service row to prevent concurrent
                 // checkouts from overselling limited stock.
                 $lockedServices = Service::query()
                     ->whereIn('id', $cartItems->pluck('service_id'))
+                    ->orderBy('id')
                     ->lockForUpdate()
                     ->get()
                     ->keyBy('id');
 
                 $subtotal = 0.0;
                 foreach ($cartItems as $item) {
-                    $service = $lockedServices[$item->service_id];
+                    $service = $lockedServices->get($item->service_id);
+
+                    if (! $service || ! $service->active) {
+                        throw ValidationException::withMessages([
+                            'cart' => 'A service in your cart is no longer available. Please refresh your cart.',
+                        ]);
+                    }
 
                     if (! $service->hasStockFor($item->quantity)) {
                         throw ValidationException::withMessages([
@@ -206,7 +215,9 @@ class CheckoutController extends Controller
                     'description' => 'Purchase: order '.$reference.' ('.$cartItems->count().' item'.($cartItems->count() === 1 ? '' : 's').')',
                 ]);
 
-                CartItem::where('user_id', $userId)->delete();
+                // Delete only the cart rows included in this checkout. A
+                // newly-added row must not disappear without being charged.
+                CartItem::where('user_id', $userId)->whereIn('id', $cartItemIds)->delete();
 
                 return $order;
             });
