@@ -30,6 +30,17 @@ class FulfillmentAdapterResolver
 
     public static function resolve(Provider $provider): FulfillmentProviderInterface
     {
+        if (! self::isRealAdapter($provider) && app()->environment('production')) {
+            // An unimplemented provider must never simulate a successful
+            // delivery for a customer who has paid real money. Ambiguous
+            // routes to manual review without an automatic refund or a false
+            // "completed" status.
+            throw new FulfillmentException(
+                "No real fulfilment adapter is configured for provider [{$provider->slug}]. Manual review is required.",
+                FulfillmentErrorType::Ambiguous,
+            );
+        }
+
         $adapterClass = self::ADAPTERS[$provider->slug] ?? MockFulfillmentProvider::class;
 
         return blank($provider->base_url)
