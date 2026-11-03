@@ -48,6 +48,16 @@ class MockFulfillmentProvider implements FulfillmentProviderInterface
 
     public function fulfill(array $request): array
     {
+        if (app()->environment('production')) {
+            // This adapter is only a test double. Never let it manufacture a
+            // successful delivery for a real customer or trigger a false
+            // completed order in a live environment.
+            throw new FulfillmentException(
+                'Mock fulfilment is disabled in production. Configure a real provider adapter.',
+                FulfillmentErrorType::Ambiguous,
+            );
+        }
+
         $mode = $this->mode();
 
         return match ($mode) {
@@ -90,6 +100,13 @@ class MockFulfillmentProvider implements FulfillmentProviderInterface
 
     public function checkStatus(string $reference): array
     {
+        if (app()->environment('production')) {
+            // The mock cannot know whether an upstream transaction completed.
+            // Keep the outcome unresolved so ProviderRouter sends it for
+            // manual review rather than treating a mock response as delivery.
+            return ['status' => 'pending', 'raw' => ['reference' => $reference, 'blocked' => 'mock adapter in production']];
+        }
+
         // Only meaningfully exercised by the 'ambiguous_timeout' mode in
         // tests: the fulfill() call above threw Ambiguous, but the upstream
         // actually DID complete the transaction, which is exactly the
