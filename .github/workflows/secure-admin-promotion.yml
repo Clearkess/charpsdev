@@ -50,6 +50,41 @@ jobs:
         run: |
           php artisan list --raw | grep -F 'user:make-admin' >/dev/null
 
+      - name: Configure explicit Neon connection variables
+        shell: bash
+        run: |
+          php <<'PHP'
+          <?php
+          $url = getenv('DB_URL');
+          $parts = is_string($url) ? parse_url($url) : false;
+
+          if (!is_array($parts) || empty($parts['host']) || empty($parts['path'])) {
+              fwrite(STDERR, "NEON_DATABASE_URL is missing a valid PostgreSQL host or database path. Check the GitHub Actions secret without printing it.\n");
+              exit(1);
+          }
+
+          $values = [
+              'DB_HOST' => $parts['host'],
+              'DB_PORT' => (string) ($parts['port'] ?? 5432),
+              'DB_DATABASE' => rawurldecode(ltrim($parts['path'], '/')),
+              'DB_USERNAME' => rawurldecode($parts['user'] ?? ''),
+              'DB_PASSWORD' => rawurldecode($parts['pass'] ?? ''),
+              'DB_SSLMODE' => 'require',
+              'DB_URL' => '',
+          ];
+
+          foreach ($values as $key => $value) {
+              if (str_contains($value, "\n") || str_contains($value, "\r")) {
+                  fwrite(STDERR, "Database connection value contains an invalid line break.\n");
+                  exit(1);
+              }
+              file_put_contents(getenv('GITHUB_ENV'), $key . '=' . $value . "\n", FILE_APPEND);
+          }
+          PHP
+
+      - name: Verify Neon database connection
+        run: php artisan db:show --database=pgsql --no-interaction
+
       - name: Promote the specified existing account
         env:
           ADMIN_EMAIL: ${{ inputs.admin_email }}
