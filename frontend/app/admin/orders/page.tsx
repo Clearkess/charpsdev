@@ -15,6 +15,7 @@ import {
 } from "@/components/common/StateBlock";
 
 import {
+  useAdminOrderQuery,
   useAdminOrderUpdateMutation,
   useAdminOrdersQuery,
 } from "@/hooks/queries/useAdminQueries";
