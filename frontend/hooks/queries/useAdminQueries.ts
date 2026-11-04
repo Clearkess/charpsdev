@@ -728,3 +728,26 @@ export function useAdminSettingsQuery() {
     enabled: isAdmin,
   });
 }
+
+/**
+ * Bulk update existing admin settings.
+ * The backend expects: { settings: [{ key, value }, ...] }.
+ */
+export function useAdminSettingsUpdateMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (settings: Array<{ key: string; value: string }>) => {
+      const response = await api.put<{
+        success: boolean;
+        message: string;
+        data: Setting[];
+      }>("/admin/settings", { settings });
+
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminSettings });
+    },
+  });
+}
