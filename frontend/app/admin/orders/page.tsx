@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState } from "react";
@@ -79,6 +80,10 @@ export default function AdminOrdersPage() {
 
   const orders = useAdminOrdersQuery(page);
   const updateOrder = useAdminOrderUpdateMutation();
+
+  // Fetch the complete order, including its linked payment transaction.
+  const orderDetails = useAdminOrderQuery(selectedOrder?.id ?? null);
+  const displayedOrder = orderDetails.data ?? selectedOrder;
 
   const onStatusChange = async (
     order: Order,
@@ -677,201 +682,354 @@ export default function AdminOrdersPage() {
       )}
 
       {/* Full order details dialog */}
-      
-{selectedOrder && (
-  <div
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3"
-    onClick={() => setSelectedOrder(null)}
-  >
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="order-details-title"
-      className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-background p-5 shadow-xl"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <div>
-          <h2 id="order-details-title" className="text-xl font-bold">
-            Order Details
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            {selectedOrder.reference ||
-              selectedOrder.order_number ||
-              `#${selectedOrder.id}`}
-          </p>
-        </div>
-
-        <Button
-          variant="outline"
+      {selectedOrder && displayedOrder && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3"
           onClick={() => setSelectedOrder(null)}
         >
-          Close
-        </Button>
-      </div>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="order-details-title"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-background p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h2 id="order-details-title" className="text-xl font-bold">
+                  Order Details
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {displayedOrder.reference ||
+                    displayedOrder.order_number ||
+                    `#${displayedOrder.id}`}
+                </p>
+              </div>
 
-      <div className="space-y-5">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <p className="text-xs text-muted-foreground">Customer</p>
-            <p className="font-medium">
-              {selectedOrder.user?.name || "—"}
-            </p>
-            <p className="break-all text-sm text-muted-foreground">
-              {selectedOrder.user?.email || "—"}
-            </p>
-          </div>
+              <Button
+                variant="outline"
+                onClick={() => setSelectedOrder(null)}
+              >
+                Close
+              </Button>
+            </div>
 
-          <div>
-            <p className="text-xs text-muted-foreground">Service</p>
-            <p className="font-medium">
-              {selectedOrder.service?.name ||
-                (selectedOrder.details as {
-                  service_name?: string;
-                } | null)?.service_name ||
-                "—"}
-            </p>
-          </div>
+            {orderDetails.isFetching && (
+              <p className="mb-4 text-xs text-muted-foreground">
+                Refreshing complete order and payment information...
+              </p>
+            )}
 
-          <div>
-            <p className="text-xs text-muted-foreground">Amount</p>
-            <p className="text-lg font-bold">
-              {formatCurrency(
-                selectedOrder.amount ??
-                  selectedOrder.total ??
-                  selectedOrder.price
-              )}
-            </p>
-          </div>
+            {orderDetails.error && (
+              <div className="mb-4 rounded-lg border border-border bg-muted p-3 text-sm">
+                Could not refresh the complete order details. Showing
+                the information already available.
+              </div>
+            )}
 
-          <div>
-            <p className="text-xs text-muted-foreground">Status</p>
-            <Badge variant={statusVariant(selectedOrder.status)}>
-              {selectedOrder.status}
-            </Badge>
-          </div>
-
-          <div>
-            <p className="text-xs text-muted-foreground">Quantity</p>
-            <p>{selectedOrder.quantity ?? "—"}</p>
-          </div>
-
-          <div>
-            <p className="text-xs text-muted-foreground">Payment method</p>
-            <p>{selectedOrder.payment_method || "—"}</p>
-          </div>
-
-          <div>
-            <p className="text-xs text-muted-foreground">
-              Provider reference
-            </p>
-            <p className="break-all">
-              {selectedOrder.provider_reference || "Not available"}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-xs text-muted-foreground">Coupon</p>
-            <p>{selectedOrder.coupon_code || "None"}</p>
-          </div>
-
-          <div>
-            <p className="text-xs text-muted-foreground">Discount</p>
-            <p>
-              {selectedOrder.discount != null
-                ? formatCurrency(selectedOrder.discount)
-                : "—"}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-xs text-muted-foreground">Created</p>
-            <p>
-              {selectedOrder.created_at
-                ? formatDate(selectedOrder.created_at)
-                : "—"}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-xs text-muted-foreground">Last updated</p>
-            <p>
-              {selectedOrder.updated_at
-                ? formatDate(selectedOrder.updated_at)
-                : "—"}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-xs text-muted-foreground">Delivered at</p>
-            <p>
-              {selectedOrder.delivered_at
-                ? formatDate(selectedOrder.delivered_at)
-                : "Not delivered"}
-            </p>
-          </div>
-        </div>
-
-        <div>
-          <h3 className="mb-2 text-sm font-semibold">
-            Delivery information
-          </h3>
-          <div className="break-words rounded-lg border border-border bg-muted p-3 text-sm">
-            {selectedOrder.delivery_content ||
-              "No delivery information recorded."}
-          </div>
-        </div>
-
-        {selectedOrder.items && selectedOrder.items.length > 0 && (
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">Order items</h3>
-            <div className="space-y-2">
-              {selectedOrder.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-lg border border-border p-3 text-sm"
-                >
+            <div className="space-y-5">
+              {/* Main order information */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Customer</p>
                   <p className="font-medium">
-                    {item.service?.name || `Service #${item.service_id}`}
+                    {displayedOrder.user?.name || "—"}
                   </p>
-                  <p className="text-muted-foreground">
-                    Quantity: {item.quantity}
-                  </p>
-                  <p className="text-muted-foreground">
-                    Price: {formatCurrency(item.price)}
+                  <p className="break-all text-sm text-muted-foreground">
+                    {displayedOrder.user?.email || "—"}
                   </p>
                 </div>
-              ))}
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Service</p>
+                  <p className="font-medium">
+                    {displayedOrder.service?.name ||
+                      (displayedOrder.details as {
+                        service_name?: string;
+                      } | null)?.service_name ||
+                      "—"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Amount</p>
+                  <p className="text-lg font-bold">
+                    {formatCurrency(
+                      displayedOrder.amount ??
+                        displayedOrder.total ??
+                        displayedOrder.price
+                    )}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <Badge variant={statusVariant(displayedOrder.status)}>
+                    {displayedOrder.status}
+                  </Badge>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Quantity</p>
+                  <p>{displayValue(displayedOrder.quantity)}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Payment method
+                  </p>
+                  <p>{displayValue(displayedOrder.payment_method)}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Provider reference
+                  </p>
+                  <p className="break-all">
+                    {displayValue(displayedOrder.provider_reference)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Coupon</p>
+                  <p>{displayValue(displayedOrder.coupon_code || "None")}</p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Discount</p>
+                  <p>
+                    {displayedOrder.discount != null
+                      ? formatCurrency(displayedOrder.discount)
+                      : "—"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Created</p>
+                  <p>
+                    {displayedOrder.created_at
+                      ? formatDate(displayedOrder.created_at)
+                      : "—"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Last updated
+                  </p>
+                  <p>
+                    {displayedOrder.updated_at
+                      ? formatDate(displayedOrder.updated_at)
+                      : "—"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Delivered at
+                  </p>
+                  <p>
+                    {displayedOrder.delivered_at
+                      ? formatDate(displayedOrder.delivered_at)
+                      : "Not delivered"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Payment transaction information */}
+              <div className="rounded-xl border border-border p-4">
+                <h3 className="mb-3 text-base font-semibold">
+                  Payment Transaction
+                </h3>
+
+                {displayedOrder.transaction ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Transaction ID
+                      </p>
+                      <p className="break-all font-medium">
+                        {displayValue(displayedOrder.transaction.id)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Transaction reference
+                      </p>
+                      <p className="break-all font-medium">
+                        {displayValue(displayedOrder.transaction.reference)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Transaction amount
+                      </p>
+                      <p className="font-semibold">
+                        {formatCurrency(displayedOrder.transaction.amount)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Currency
+                      </p>
+                      <p>
+                        {displayValue(displayedOrder.transaction.currency)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Transaction status
+                      </p>
+                      <Badge
+                        variant={statusVariant(
+                          displayedOrder.transaction.status
+                        )}
+                      >
+                        {displayValue(displayedOrder.transaction.status)}
+                      </Badge>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Transaction type
+                      </p>
+                      <p>{displayValue(displayedOrder.transaction.type)}</p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Payment gateway
+                      </p>
+                      <p>{displayValue(displayedOrder.transaction.gateway)}</p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Gateway reference
+                      </p>
+                      <p className="break-all">
+                        {displayValue(
+                          displayedOrder.transaction.gateway_reference
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Transaction date
+                      </p>
+                      <p>
+                        {displayedOrder.transaction.created_at
+                          ? formatDate(displayedOrder.transaction.created_at)
+                          : "—"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Description
+                      </p>
+                      <p>
+                        {displayValue(
+                          displayedOrder.transaction.description
+                        )}
+                      </p>
+                    </div>
+
+                    {displayedOrder.transaction.failure_reason && (
+                      <div className="sm:col-span-2">
+                        <p className="text-xs text-muted-foreground">
+                          Failure reason
+                        </p>
+                        <p className="break-words text-sm text-destructive">
+                          {displayValue(
+                            displayedOrder.transaction.failure_reason
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No linked purchase transaction was found for this order.
+                    Transaction information will appear here when a matching
+                    payment record is available.
+                  </p>
+                )}
+              </div>
+
+              {/* Delivery information */}
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">
+                  Delivery information
+                </h3>
+                <div className="break-words rounded-lg border border-border bg-muted p-3 text-sm">
+                  {displayedOrder.delivery_content ||
+                    "No delivery information recorded."}
+                </div>
+              </div>
+
+              {/* Order items */}
+              {displayedOrder.items &&
+                displayedOrder.items.length > 0 && (
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold">
+                      Order items
+                    </h3>
+
+                    <div className="space-y-2">
+                      {displayedOrder.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="rounded-lg border border-border p-3 text-sm"
+                        >
+                          <p className="font-medium">
+                            {item.service?.name ||
+                              `Service #${item.service_id}`}
+                          </p>
+                          <p className="text-muted-foreground">
+                            Quantity: {item.quantity}
+                          </p>
+                          <p className="text-muted-foreground">
+                            Price: {formatCurrency(item.price)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Additional order details */}
+              {displayedOrder.details && (
+                <details className="rounded-lg border border-border p-3">
+                  <summary className="cursor-pointer text-sm font-semibold">
+                    Additional order details
+                  </summary>
+                  <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs">
+                    {JSON.stringify(displayedOrder.details, null, 2)}
+                  </pre>
+                </details>
+              )}
+
+              {/* Order payload */}
+              {displayedOrder.payload && (
+                <details className="rounded-lg border border-border p-3">
+                  <summary className="cursor-pointer text-sm font-semibold">
+                    Order payload
+                  </summary>
+                  <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs">
+                    {JSON.stringify(displayedOrder.payload, null, 2)}
+                  </pre>
+                </details>
+              )}
             </div>
           </div>
-        )}
-
-        {selectedOrder.details && (
-          <details className="rounded-lg border border-border p-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Additional order details
-            </summary>
-            <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs">
-              {JSON.stringify(selectedOrder.details, null, 2)}
-            </pre>
-          </details>
-        )}
-
-        {selectedOrder.payload && (
-          <details className="rounded-lg border border-border p-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Order payload
-            </summary>
-            <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs">
-              {JSON.stringify(selectedOrder.payload, null, 2)}
-            </pre>
-          </details>
-        )}
-      </div>
-    </div>
-  </div>
-)}
+        </div>
+      )}
     </section>
   );
-              }
-      
+}
