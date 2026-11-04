@@ -1,3 +1,4 @@
+
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,11 +59,7 @@ export function useAdminDashboardChartQuery() {
 }
 
 /**
- * Phase 8 (analytics): powers the dedicated /admin/analytics page, separate
- * from the pre-existing (already-in-production) useAdminDashboardQuery /
- * useAdminDashboardChartQuery above. `days` defaults to 30 and must be one
- * of 7/30/90/365 (enforced server-side too); `keepPreviousData` avoids a
- * loading flash when the admin switches the range selector.
+ * Dedicated admin analytics query.
  */
 export function useAdminAnalyticsQuery(days: 7 | 30 | 90 | 365 = 30) {
   const isAdmin = useIsAdmin();
@@ -270,6 +267,26 @@ export function useAdminOrdersQuery(page: number = 1) {
   });
 }
 
+/**
+ * Fetches one complete order, including its transaction relation.
+ * Used by the order details modal so it does not depend only on the
+ * potentially incomplete order row returned by the paginated endpoint.
+ */
+export function useAdminOrderQuery(orderId: number | null) {
+  const isAdmin = useIsAdmin();
+
+  return useQuery({
+    queryKey: ["admin", "order", orderId],
+    queryFn: async () => {
+      const response = await api.get<{ success: boolean; data: Order }>(
+        `/admin/orders/${orderId}`,
+      );
+      return response.data.data;
+    },
+    enabled: isAdmin && orderId !== null,
+  });
+}
+
 export function useAdminOrderUpdateMutation() {
   const queryClient = useQueryClient();
 
@@ -283,7 +300,6 @@ export function useAdminOrderUpdateMutation() {
       orderId: number;
       status: OrderStatus;
       provider_reference?: string;
-      /** Phase 5: sending this alongside status "completed" triggers a delivery email. */
       delivery_content?: string;
     }) => {
       const response = await api.put<{ success: boolean; message: string; data: Order }>(
@@ -292,8 +308,9 @@ export function useAdminOrderUpdateMutation() {
       );
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "order", variables.orderId] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminDashboard });
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminDashboardChart });
     },
@@ -343,11 +360,7 @@ export function useAdminWalletActionMutation() {
 }
 
 /**
- * Phase 2 (Wallet Refinements): per-user transaction drill-down for the
- * admin wallets page, backed by GET /admin/wallets/{user}/transactions
- * (reads the same `transactions` table the user's own Wallet page reads,
- * so what an admin sees for a user matches what that user sees for
- * themselves).
+ * Per-user transaction drill-down for the admin wallets page.
  */
 export function useAdminWalletTransactionsQuery(userId: number | null, page: number = 1) {
   const isAdmin = useIsAdmin();
@@ -366,9 +379,7 @@ export function useAdminWalletTransactionsQuery(userId: number | null, page: num
   });
 }
 
-/* ------------------------------------------------------------------ */
-/* Phase 4 — Providers / Coupons / Settings admin pages                */
-/* ------------------------------------------------------------------ */
+/* Providers / Coupons / Settings admin pages */
 
 export function useAdminProvidersQuery() {
   const isAdmin = useIsAdmin();
@@ -438,9 +449,7 @@ export function useAdminProviderDeleteMutation() {
   });
 }
 
-/* ------------------------------------------------------------------ */
-/* Provider Router (Option B) — provider health + per-service routing  */
-/* ------------------------------------------------------------------ */
+/* Provider health and routing */
 
 export interface ProviderHealthSummary {
   total: number;
@@ -449,7 +458,6 @@ export interface ProviderHealthSummary {
   offline: number;
 }
 
-/** Powers the Providers page's "Provider Health summary panel". */
 export function useAdminProviderHealthSummaryQuery() {
   const isAdmin = useIsAdmin();
 
@@ -465,11 +473,6 @@ export function useAdminProviderHealthSummaryQuery() {
   });
 }
 
-/**
- * POST /admin/providers/{id}/test — read-only connectivity/credential
- * check (adapter's ping()). Does NOT affect health_status/cooldown, so it
- * intentionally does not invalidate adminProviders.
- */
 export function useAdminProviderTestMutation() {
   return useMutation({
     mutationFn: async (providerId: number) => {
@@ -482,12 +485,6 @@ export function useAdminProviderTestMutation() {
   });
 }
 
-/**
- * POST /admin/providers/{id}/health-check — an active synthetic check that
- * DOES affect health_status/cooldown/counters exactly like a real
- * fulfilment attempt would, so this invalidates both the provider list and
- * the health summary panel.
- */
 export function useAdminProviderHealthCheckMutation() {
   const queryClient = useQueryClient();
 
@@ -515,15 +512,6 @@ export interface EasylogsProductSyncResult {
   remote_products: number;
 }
 
-/**
- * POST /admin/providers/{id}/easylogs/products/sync — imports Easylogs
- * Marketplace's catalogue as Services, each with an immediately-routable
- * service_provider_routes entry pointing at the real Easylogs product_code
- * (see EasylogsProductSyncService's class doc comment). Backend rejects
- * with 422 if the target provider's slug isn't exactly 'easylogs'. Affects
- * the services list (new/updated Service rows) and this provider's own
- * routing chains, so invalidates both.
- */
 export function useAdminEasylogsProductSyncMutation() {
   const queryClient = useQueryClient();
 
@@ -550,7 +538,6 @@ export function useAdminEasylogsProductSyncMutation() {
   });
 }
 
-/** GET /admin/providers/{id}/health — recent health-check history for a drill-down view. */
 export function useAdminProviderHealthQuery(providerId: number | null) {
   const isAdmin = useIsAdmin();
 
@@ -567,10 +554,6 @@ export function useAdminProviderHealthQuery(providerId: number | null) {
   });
 }
 
-/**
- * GET /admin/services/{service}/providers — the per-service routing chain
- * that backs the "Routing editor" UI, in ProviderRouter's exact try-order.
- */
 export function useAdminServiceProvidersQuery(serviceId: number | null) {
   const isAdmin = useIsAdmin();
 
@@ -594,7 +577,6 @@ export interface AdminServiceProviderRoutePayload {
   provider_cost?: number | null;
 }
 
-/** POST /admin/services/{service}/providers — "+ Add provider". */
 export function useAdminServiceProviderCreateMutation(serviceId: number) {
   const queryClient = useQueryClient();
 
@@ -612,7 +594,6 @@ export function useAdminServiceProviderCreateMutation(serviceId: number) {
   });
 }
 
-/** PUT /admin/services/{service}/providers/{route} — edit priority/enabled/etc. */
 export function useAdminServiceProviderUpdateMutation(serviceId: number) {
   const queryClient = useQueryClient();
 
@@ -633,7 +614,6 @@ export function useAdminServiceProviderUpdateMutation(serviceId: number) {
   });
 }
 
-/** DELETE /admin/services/{service}/providers/{route} — remove from chain. */
 export function useAdminServiceProviderDeleteMutation(serviceId: number) {
   const queryClient = useQueryClient();
 
@@ -648,11 +628,6 @@ export function useAdminServiceProviderDeleteMutation(serviceId: number) {
   });
 }
 
-/**
- * POST /admin/services/{service}/providers/reorder — the "Save routing" /
- * drag-to-reorder action. Sends the full desired order as route IDs; the
- * backend rewrites priority for every one of them in that order.
- */
 export function useAdminServiceProviderReorderMutation(serviceId: number) {
   const queryClient = useQueryClient();
 
@@ -751,22 +726,5 @@ export function useAdminSettingsQuery() {
       return response.data.data;
     },
     enabled: isAdmin,
-  });
-}
-
-export function useAdminSettingsUpdateMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (settings: { key: string; value: string | number | boolean }[]) => {
-      const response = await api.put<{ success: boolean; message: string; data: Setting[] }>(
-        "/admin/settings",
-        { settings },
-      );
-      return response.data;
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.adminSettings });
-    },
   });
 }
