@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
@@ -49,5 +50,14 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    /**
+     * The payment transaction shares the order reference.
+     */
+    public function transaction(): HasOne
+    {
+        return $this->hasOne(Transaction::class, 'reference', 'reference')
+            ->where('type', 'purchase');
     }
 }
