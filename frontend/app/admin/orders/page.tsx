@@ -51,17 +51,15 @@ return "muted" as const;
 
 export default function AdminOrdersPage() {
 const [page, setPage] = useState(1);
+const [message, setMessage] = useState<string | null>(null);
+const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
+const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(
+null
+);
+const [deliveryDraft, setDeliveryDraft] = useState("");
 
 const orders = useAdminOrdersQuery(page);
 const updateOrder = useAdminOrderUpdateMutation();
-
-const [message, setMessage] = useState<string | null>(null);
-const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
-
-const [deliveringOrderId, setDeliveringOrderId] =
-useState<number | null>(null);
-
-const [deliveryDraft, setDeliveryDraft] = useState("");
 
 const onStatusChange = async (
 order: Order,
@@ -69,28 +67,25 @@ status: OrderStatus
 ) => {
 if (status === order.status) return;
 
-setMessage(null);  
-setPendingOrderId(order.id);  
+setMessage(null);
+setPendingOrderId(order.id);
 
-try {  
-  const response = await updateOrder.mutateAsync({  
-    orderId: order.id,  
-    status,  
-  });  
+try {
+  const response = await updateOrder.mutateAsync({
+    orderId: order.id,
+    status,
+  });
 
-  setMessage(  
-    response.message ||  
-      `Order #${order.id} updated to "${status}".`  
-  );  
-} catch (error) {  
-  setMessage(  
-    extractErrorMessage(  
-      error,  
-      "Failed to update order status."  
-    )  
-  );  
-} finally {  
-  setPendingOrderId(null);  
+  setMessage(
+    response.message ||
+      `Order #${order.id} updated to "${status}".`
+  );
+} catch (error) {
+  setMessage(
+    extractErrorMessage(error, "Failed to update order status.")
+  );
+} finally {
+  setPendingOrderId(null);
 }
 
 };
@@ -109,32 +104,29 @@ setDeliveryDraft("");
 const saveDelivery = async (order: Order) => {
 if (!deliveryDraft.trim()) return;
 
-setMessage(null);  
-setPendingOrderId(order.id);  
+setMessage(null);
+setPendingOrderId(order.id);
 
-try {  
-  const response = await updateOrder.mutateAsync({  
-    orderId: order.id,  
-    status: "completed",  
-    delivery_content: deliveryDraft.trim(),  
-  });  
+try {
+  const response = await updateOrder.mutateAsync({
+    orderId: order.id,
+    status: "completed",
+    delivery_content: deliveryDraft.trim(),
+  });
 
-  setMessage(  
-    response.message ||  
-      `Delivery info saved for order #${order.id}.`  
-  );  
+  setMessage(
+    response.message ||
+      `Delivery information saved for order #${order.id}.`
+  );
 
-  setDeliveringOrderId(null);  
-  setDeliveryDraft("");  
-} catch (error) {  
-  setMessage(  
-    extractErrorMessage(  
-      error,  
-      "Failed to save delivery info."  
-    )  
-  );  
-} finally {  
-  setPendingOrderId(null);  
+  setDeliveringOrderId(null);
+  setDeliveryDraft("");
+} catch (error) {
+  setMessage(
+    extractErrorMessage(error, "Failed to save delivery information.")
+  );
+} finally {
+  setPendingOrderId(null);
 }
 
 };
@@ -144,180 +136,164 @@ const columns = useMemo<ColumnDef<Order, unknown>[]>(
 {
 id: "reference",
 header: "Order",
-accessorFn: (row) => row.reference || #${row.id},
+accessorFn: (row) => row.reference || "#${row.id}",
 cell: ({ row }) => (
 <div>
 <div className="font-medium">
-{row.original.reference || #${row.original.id}}
+{row.original.reference || "#${row.original.id}"}
 </div>
+<div className="text-xs text-muted-foreground">
+{(row.original.details as {
+service_name?: string;
+} | null)?.service_name ||
+row.original.service?.name ||
+"—"}
+</div>
+</div>
+),
+},
+{
+id: "customer",
+header: "Customer",
+accessorFn: (row) => row.user?.name ?? "",
+cell: ({ row }) => (
+<div>
+<div className="font-medium">
+{row.original.user?.name || "—"}
+</div>
+<div className="text-xs text-muted-foreground">
+{row.original.user?.email || "—"}
+</div>
+</div>
+),
+},
+{
+id: "amount",
+header: "Amount",
+accessorFn: (row) => Number(row.amount ?? row.price ?? 0),
+cell: ({ row }) =>
+formatCurrency(row.original.amount ?? row.original.price),
+},
+{
+id: "status",
+header: "Status",
+accessorFn: (row) => row.status,
+cell: ({ row }) => {
+const order = row.original;
+const isBusy =
+updateOrder.isPending && pendingOrderId === order.id;
 
-<div className="text-xs text-muted-foreground">  
-          {(row.original.details as {  
-            service_name?: string;  
-          } | null)?.service_name ||  
-            row.original.service?.name ||  
-            "—"}  
-        </div>  
-      </div>  
-    ),  
-  },  
-  {  
-    id: "customer",  
-    header: "Customer",  
-    accessorFn: (row) => row.user?.name ?? "",  
-    cell: ({ row }) => (  
-      <div>  
-        <div className="font-medium">  
-          {row.original.user?.name || "—"}  
-        </div>  
+      return (
+        <div className="flex items-center gap-2">
+          <Badge variant={statusVariant(order.status)}>
+            {order.status}
+          </Badge>
 
-        <div className="text-xs text-muted-foreground">  
-          {row.original.user?.email}  
-        </div>  
-      </div>  
-    ),  
-  },  
-  {  
-    id: "amount",  
-    header: "Amount",  
-    accessorFn: (row) =>  
-      Number(row.amount ?? row.price ?? 0),  
-    cell: ({ row }) =>  
-      formatCurrency(  
-        row.original.amount ?? row.original.price  
-      ),  
-  },  
-  {  
-    id: "status",  
-    header: "Status",  
-    accessorFn: (row) => row.status,  
-    cell: ({ row }) => {  
-      const order = row.original;  
+          <select
+            value={order.status}
+            disabled={isBusy}
+            onChange={(event) =>
+              void onStatusChange(
+                order,
+                event.target.value as OrderStatus
+              )
+            }
+            aria-label={`Update status for order ${
+              order.reference || order.id
+            }`}
+            className="h-8 rounded-lg border border-input bg-background px-2 text-xs disabled:opacity-50"
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    },
+  },
+  {
+    id: "delivery",
+    header: "Delivery",
+    enableSorting: false,
+    cell: ({ row }) => {
+      const order = row.original;
+      const isBusy =
+        updateOrder.isPending && pendingOrderId === order.id;
 
-      const isBusy =  
-        updateOrder.isPending &&  
-        pendingOrderId === order.id;  
+      if (deliveringOrderId === order.id) {
+        return (
+          <div className="w-64 space-y-2">
+            <textarea
+              value={deliveryDraft}
+              onChange={(event) =>
+                setDeliveryDraft(event.target.value)
+              }
+              placeholder="License key, PIN, download link or delivery details..."
+              rows={3}
+              className="w-full rounded-lg border border-input bg-background p-2 text-xs"
+            />
 
-      return (  
-        <div className="flex items-center gap-2">  
-          <Badge variant={statusVariant(order.status)}>  
-            {order.status}  
-          </Badge>  
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                disabled={isBusy || !deliveryDraft.trim()}
+                onClick={() => void saveDelivery(order)}
+              >
+                {isBusy ? "Sending..." : "Save & notify"}
+              </Button>
 
-          <select  
-            value={order.status}  
-            disabled={isBusy}  
-            onChange={(event) =>  
-              void onStatusChange(  
-                order,  
-                event.target.value as OrderStatus  
-              )  
-            }  
-            aria-label={`Update status for order ${  
-              order.reference || order.id  
-            }`}  
-            className="h-8 rounded-lg border border-input bg-background px-2 text-xs disabled:opacity-50"  
-          >  
-            {STATUS_OPTIONS.map((option) => (  
-              <option key={option} value={option}>  
-                {option}  
-              </option>  
-            ))}  
-          </select>  
-        </div>  
-      );  
-    },  
-  },  
-  {  
-    id: "delivery",  
-    header: "Delivery",  
-    enableSorting: false,  
-    cell: ({ row }) => {  
-      const order = row.original;  
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={cancelDelivery}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        );
+      }
 
-      const isBusy =  
-        updateOrder.isPending &&  
-        pendingOrderId === order.id;  
+      return (
+        <div className="space-y-2">
+          {order.delivery_content ? (
+            <p
+              className="max-w-[220px] truncate font-mono text-xs text-muted-foreground"
+              title={order.delivery_content}
+            >
+              {order.delivery_content}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Not delivered yet
+            </p>
+          )}
 
-      if (deliveringOrderId === order.id) {  
-        return (  
-          <div className="w-64 space-y-2">  
-            <textarea  
-              value={deliveryDraft}  
-              onChange={(event) =>  
-                setDeliveryDraft(event.target.value)  
-              }  
-              placeholder="License key, PIN, download link or delivery details..."  
-              rows={3}  
-              className="w-full rounded-lg border border-input bg-background p-2 text-xs"  
-            />  
-
-            <div className="flex gap-2">  
-              <Button  
-                size="sm"  
-                disabled={  
-                  isBusy || !deliveryDraft.trim()  
-                }  
-                onClick={() =>  
-                  void saveDelivery(order)  
-                }  
-              >  
-                {isBusy ? "Sending..." : "Save & notify"}  
-              </Button>  
-
-              <Button  
-                size="sm"  
-                variant="outline"  
-                onClick={cancelDelivery}  
-              >  
-                Cancel  
-              </Button>  
-            </div>  
-          </div>  
-        );  
-      }  
-
-      return (  
-        <div className="space-y-2">  
-          {order.delivery_content ? (  
-            <p  
-              className="max-w-[220px] truncate font-mono text-xs text-muted-foreground"  
-              title={order.delivery_content}  
-            >  
-              {order.delivery_content}  
-            </p>  
-          ) : (  
-            <p className="text-xs text-muted-foreground">  
-              Not delivered yet  
-            </p>  
-          )}  
-
-          <Button  
-            size="sm"  
-            variant="outline"  
-            onClick={() => startDelivery(order)}  
-          >  
-            {order.delivery_content  
-              ? "Edit"  
-              : "Add delivery info"}  
-          </Button>  
-        </div>  
-      );  
-    },  
-  },  
-  {  
-    id: "created",  
-    header: "Created",  
-    accessorFn: (row) => row.created_at ?? "",  
-    cell: ({ row }) =>  
-      formatDate(row.original.created_at),  
-  },  
-],  
-[  
-  updateOrder.isPending,  
-  pendingOrderId,  
-  deliveringOrderId,  
-  deliveryDraft,  
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => startDelivery(order)}
+          >
+            {order.delivery_content ? "Edit" : "Add delivery info"}
+          </Button>
+        </div>
+      );
+    },
+  },
+  {
+    id: "created",
+    header: "Created",
+    accessorFn: (row) => row.created_at ?? "",
+    cell: ({ row }) => formatDate(row.original.created_at),
+  },
+],
+[
+  updateOrder.isPending,
+  pendingOrderId,
+  deliveringOrderId,
+  deliveryDraft,
 ]
 
 );
@@ -339,9 +315,9 @@ orders.error,
 
 if (!orders.data?.data.length) {
 return (
-<EmptyBlock  
-title="No orders"  
-description="No orders have been placed yet."  
+<EmptyBlock
+title="No orders"
+description="No orders have been placed yet."
 />
 );
 }
@@ -353,174 +329,163 @@ return (
 Admin · Orders
 </h1>
 
-<p className="mt-2 text-muted-foreground">  
-      View every order placed on the platform and update  
-      its status. Changing a status to completed or failed  
-      notifies the customer. Adding delivery information  
-      automatically marks the order completed and emails  
-      it to the customer.  
-    </p>  
-  </div>  
+    <p className="mt-2 text-muted-foreground">
+      View every order placed on the platform and update its status.
+      Changing a status to completed or failed notifies the customer.
+      Adding delivery information automatically marks the order completed
+      and emails it to the customer.
+    </p>
+  </div>
 
-  {message && (  
-    <div  
-      role="status"  
-      className="rounded-lg border border-border bg-muted p-3 text-sm"  
-    >  
-      {message}  
-    </div>  
-  )}  
+  {message && (
+    <div
+      role="status"
+      className="rounded-lg border border-border bg-muted p-3 text-sm"
+    >
+      {message}
+    </div>
+  )}
 
-  {/* Mobile-friendly order cards */}  
-  <div className="space-y-3 md:hidden">  
-    {orders.data.data.map((order) => {  
-      const isBusy =  
-        updateOrder.isPending &&  
-        pendingOrderId === order.id;  
+  {/* Mobile-friendly order cards */}
+  <div className="space-y-3 md:hidden">
+    {orders.data.data.map((order) => {
+      const isBusy =
+        updateOrder.isPending && pendingOrderId === order.id;
 
-      return (  
-        <Card key={order.id}>  
-          <CardContent className="space-y-4">  
-            <div className="flex flex-wrap justify-between gap-2">  
-              <div>  
-                <p className="font-semibold">  
-                  {order.reference || `#${order.id}`}  
-                </p>  
+      return (
+        <Card key={order.id}>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap justify-between gap-2">
+              <div>
+                <p className="font-semibold">
+                  {order.reference || `#${order.id}`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {order.user?.name || "Customer"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {order.user?.email || ""}
+                </p>
+              </div>
 
-                <p className="text-xs text-muted-foreground">  
-                  {order.user?.name || "Customer"}  
-                </p>  
+              <Badge variant={statusVariant(order.status)}>
+                {order.status}
+              </Badge>
+            </div>
 
-                <p className="text-xs text-muted-foreground">  
-                  {order.user?.email}  
-                </p>  
-              </div>  
+            <div className="text-lg font-bold">
+              {formatCurrency(order.amount ?? order.price)}
+            </div>
 
-              <Badge variant={statusVariant(order.status)}>  
-                {order.status}  
-              </Badge>  
-            </div>  
+            <div className="space-y-2">
+              <label
+                htmlFor={`status-${order.id}`}
+                className="text-sm font-medium"
+              >
+                Update order status
+              </label>
 
-            <div className="text-lg font-bold">  
-              {formatCurrency(  
-                order.amount ?? order.price  
-              )}  
-            </div>  
+              <select
+                id={`status-${order.id}`}
+                value={order.status}
+                disabled={isBusy}
+                onChange={(event) =>
+                  void onStatusChange(
+                    order,
+                    event.target.value as OrderStatus
+                  )
+                }
+                className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50"
+              >
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            <div className="space-y-2">  
-              <label  
-                htmlFor={`status-${order.id}`}  
-                className="text-sm font-medium"  
-              >  
-                Update order status  
-              </label>  
+            <div className="space-y-2">
+              <p className="text-sm font-medium">
+                Delivery information
+              </p>
 
-              <select  
-                id={`status-${order.id}`}  
-                value={order.status}  
-                disabled={isBusy}  
-                onChange={(event) =>  
-                  void onStatusChange(  
-                    order,  
-                    event.target.value as OrderStatus  
-                  )  
-                }  
-                className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50"  
-              >  
-                {STATUS_OPTIONS.map((option) => (  
-                  <option key={option} value={option}>  
-                    {option}  
-                  </option>  
-                ))}  
-              </select>  
-            </div>  
+              {deliveringOrderId === order.id ? (
+                <>
+                  <textarea
+                    value={deliveryDraft}
+                    onChange={(event) =>
+                      setDeliveryDraft(event.target.value)
+                    }
+                    placeholder="Enter license key, PIN, download link or delivery details..."
+                    rows={4}
+                    className="w-full rounded-lg border border-input bg-background p-3 text-sm"
+                  />
 
-            <div className="space-y-2">  
-              <p className="text-sm font-medium">  
-                Delivery information  
-              </p>  
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1"
+                      disabled={isBusy || !deliveryDraft.trim()}
+                      onClick={() => void saveDelivery(order)}
+                    >
+                      {isBusy ? "Sending..." : "Save & notify"}
+                    </Button>
 
-              {deliveringOrderId === order.id ? (  
-                <>  
-                  <textarea  
-                    value={deliveryDraft}  
-                    onChange={(event) =>  
-                      setDeliveryDraft(event.target.value)  
-                    }  
-                    placeholder="Enter license key, PIN, download link or delivery details..."  
-                    rows={4}  
-                    className="w-full rounded-lg border border-input bg-background p-3 text-sm"  
-                  />  
+                    <Button
+                      variant="outline"
+                      onClick={cancelDelivery}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="break-words text-xs text-muted-foreground">
+                    {order.delivery_content || "Not delivered yet"}
+                  </p>
 
-                  <div className="flex gap-2">  
-                    <Button  
-                      className="flex-1"  
-                      disabled={  
-                        isBusy || !deliveryDraft.trim()  
-                      }  
-                      onClick={() =>  
-                        void saveDelivery(order)  
-                      }  
-                    >  
-                      {isBusy ? "Sending..." : "Save & notify"}  
-                    </Button>  
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => startDelivery(order)}
+                  >
+                    {order.delivery_content
+                      ? "Edit delivery information"
+                      : "Add delivery information"}
+                  </Button>
+                </>
+              )}
+            </div>
 
-                    <Button  
-                      variant="outline"  
-                      onClick={cancelDelivery}  
-                    >  
-                      Cancel  
-                    </Button>  
-                  </div>  
-                </>  
-              ) : (  
-                <>  
-                  <p className="break-words text-xs text-muted-foreground">  
-                    {order.delivery_content ||  
-                      "Not delivered yet"}  
-                  </p>  
+            <p className="text-xs text-muted-foreground">
+              Created: {formatDate(order.created_at)}
+            </p>
+          </CardContent>
+        </Card>
+      );
+    })}
+  </div>
 
-                  <Button  
-                    className="w-full"  
-                    variant="outline"  
-                    onClick={() => startDelivery(order)}  
-                  >  
-                    {order.delivery_content  
-                      ? "Edit delivery information"  
-                      : "Add delivery information"}  
-                  </Button>  
-                </>  
-              )}  
-            </div>  
-
-            <p className="text-xs text-muted-foreground">  
-              Created: {formatDate(order.created_at)}  
-            </p>  
-          </CardContent>  
-        </Card>  
-      );  
-    })}  
-  </div>  
-
-  {/* Desktop orders table */}  
-  <div className="hidden md:block">  
-    <Card>  
-      <CardContent>  
-        <DataTable  
-          columns={columns}  
-          data={orders.data.data}  
-          isFetching={orders.isFetching}  
-          pagination={{  
-            page: orders.data.current_page,  
-            lastPage: orders.data.last_page,  
-            total: orders.data.total,  
-            onPageChange: setPage,  
-          }}  
-        />  
-      </CardContent>  
-    </Card>  
-  </div>  
+  {/* Desktop orders table */}
+  <div className="hidden md:block">
+    <Card>
+      <CardContent>
+        <DataTable
+          columns={columns}
+          data={orders.data.data}
+          isFetching={orders.isFetching}
+          pagination={{
+            page: orders.data.current_page,
+            lastPage: orders.data.last_page,
+            total: orders.data.total,
+            onPageChange: setPage,
+          }}
+        />
+      </CardContent>
+    </Card>
+  </div>
 </section>
 
-  );
-}
+);
+    }
