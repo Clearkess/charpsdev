@@ -49,10 +49,23 @@ function statusVariant(status: string) {
   return "muted" as const;
 }
 
+function displayValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
 export default function AdminOrdersPage() {
   const [page, setPage] = useState(1);
   const [message, setMessage] = useState<string | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
+
   const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(
     null
   );
@@ -60,6 +73,8 @@ export default function AdminOrdersPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const orders = useAdminOrdersQuery(page);
   const updateOrder = useAdminOrderUpdateMutation();
@@ -82,6 +97,12 @@ export default function AdminOrdersPage() {
       setMessage(
         response.message ||
           `Order #${order.id} updated to "${status}".`
+      );
+
+      setSelectedOrder((current) =>
+        current?.id === order.id
+          ? { ...current, status }
+          : current
       );
     } catch (error) {
       setMessage(
@@ -110,15 +131,27 @@ export default function AdminOrdersPage() {
     setPendingOrderId(order.id);
 
     try {
+      const content = deliveryDraft.trim();
+
       const response = await updateOrder.mutateAsync({
         orderId: order.id,
         status: "completed",
-        delivery_content: deliveryDraft.trim(),
+        delivery_content: content,
       });
 
       setMessage(
         response.message ||
           `Delivery information saved for order #${order.id}.`
+      );
+
+      setSelectedOrder((current) =>
+        current?.id === order.id
+          ? {
+              ...current,
+              status: "completed",
+              delivery_content: content,
+            }
+          : current
       );
 
       setDeliveringOrderId(null);
@@ -132,7 +165,7 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // Search and filter the orders currently loaded from the API.
+  // Search and filter orders on the currently loaded API page.
   const filteredOrders = useMemo(() => {
     const allOrders = orders.data?.data ?? [];
     const search = searchTerm.trim().toLowerCase();
@@ -146,6 +179,7 @@ export default function AdminOrdersPage() {
 
       const searchableText = [
         order.reference ?? "",
+        order.order_number ?? "",
         order.id,
         order.user?.name ?? "",
         order.user?.email ?? "",
@@ -170,12 +204,16 @@ export default function AdminOrdersPage() {
       {
         id: "reference",
         header: "Order",
-        accessorFn: (row) => row.reference || `#${row.id}`,
+        accessorFn: (row) =>
+          row.reference || row.order_number || `#${row.id}`,
         cell: ({ row }) => (
           <div>
             <div className="font-medium">
-              {row.original.reference || `#${row.original.id}`}
+              {row.original.reference ||
+                row.original.order_number ||
+                `#${row.original.id}`}
             </div>
+
             <div className="text-xs text-muted-foreground">
               {(row.original.details as {
                 service_name?: string;
@@ -195,6 +233,7 @@ export default function AdminOrdersPage() {
             <div className="font-medium">
               {row.original.user?.name || "—"}
             </div>
+
             <div className="text-xs text-muted-foreground">
               {row.original.user?.email || "—"}
             </div>
@@ -205,9 +244,13 @@ export default function AdminOrdersPage() {
         id: "amount",
         header: "Amount",
         accessorFn: (row) =>
-          Number(row.amount ?? row.price ?? 0),
+          Number(row.amount ?? row.total ?? row.price ?? 0),
         cell: ({ row }) =>
-          formatCurrency(row.original.amount ?? row.original.price),
+          formatCurrency(
+            row.original.amount ??
+              row.original.total ??
+              row.original.price
+          ),
       },
       {
         id: "status",
@@ -318,6 +361,20 @@ export default function AdminOrdersPage() {
         },
       },
       {
+        id: "details",
+        header: "Details",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSelectedOrder(row.original)}
+          >
+            View Details
+          </Button>
+        ),
+      },
+      {
         id: "created",
         header: "Created",
         accessorFn: (row) => row.created_at ?? "",
@@ -333,7 +390,7 @@ export default function AdminOrdersPage() {
   );
 
   if (orders.isPending) {
-    return <TableSkeleton rows={6} cols={6} />;
+    return <TableSkeleton rows={6} cols={7} />;
   }
 
   if (orders.error) {
@@ -396,7 +453,9 @@ export default function AdminOrdersPage() {
                 id="order-search"
                 type="search"
                 value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                onChange={(event) =>
+                  setSearchTerm(event.target.value)
+                }
                 placeholder="Reference, customer, email or service..."
                 className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
               />
@@ -413,7 +472,9 @@ export default function AdminOrdersPage() {
               <select
                 id="order-status-filter"
                 value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value)
+                }
                 className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
               >
                 <option value="all">All statuses</option>
@@ -429,8 +490,8 @@ export default function AdminOrdersPage() {
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              Showing {filteredOrders.length} of {orders.data.data.length}{" "}
-              orders on this page
+              Showing {filteredOrders.length} of{" "}
+              {orders.data.data.length} orders on this page
             </p>
 
             {(searchTerm || statusFilter !== "all") && (
@@ -449,7 +510,6 @@ export default function AdminOrdersPage() {
         </CardContent>
       </Card>
 
-      {/* No matching orders */}
       {filteredOrders.length === 0 && (
         <EmptyBlock
           title="No matching orders"
@@ -457,7 +517,7 @@ export default function AdminOrdersPage() {
         />
       )}
 
-      {/* Mobile-friendly order cards */}
+      {/* Mobile order cards */}
       {filteredOrders.length > 0 && (
         <div className="space-y-3 md:hidden">
           {filteredOrders.map((order) => {
@@ -470,11 +530,15 @@ export default function AdminOrdersPage() {
                   <div className="flex flex-wrap justify-between gap-2">
                     <div>
                       <p className="font-semibold">
-                        {order.reference || `#${order.id}`}
+                        {order.reference ||
+                          order.order_number ||
+                          `#${order.id}`}
                       </p>
+
                       <p className="text-xs text-muted-foreground">
                         {order.user?.name || "Customer"}
                       </p>
+
                       <p className="text-xs text-muted-foreground">
                         {order.user?.email || ""}
                       </p>
@@ -486,8 +550,18 @@ export default function AdminOrdersPage() {
                   </div>
 
                   <div className="text-lg font-bold">
-                    {formatCurrency(order.amount ?? order.price)}
+                    {formatCurrency(
+                      order.amount ?? order.total ?? order.price
+                    )}
                   </div>
+
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => setSelectedOrder(order)}
+                  >
+                    View Order Details
+                  </Button>
 
                   <div className="space-y-2">
                     <label
@@ -600,6 +674,6 @@ export default function AdminOrdersPage() {
           </Card>
         </div>
       )}
-    </section>
-  );
-}
+
+      {/* Full order details dialog */}
+      {sel
