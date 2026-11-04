@@ -60,17 +60,10 @@ export interface Service {
   id: number;
   name: string;
   slug?: string;
-  /** Legacy free-text category label, kept for backward compatibility. Always a string (never the relation). */
+  /** Legacy free-text category label, kept for backward compatibility. */
   category?: string;
   category_id?: number | null;
-  /**
-   * Eager-loaded Category relation. Backend PHP relation method is named
-   * `categoryGroup()` (to avoid colliding with the legacy `category` string
-   * column above), but Laravel's Eloquent JSON serialization automatically
-   * snake_cases relation keys, so this arrives over the wire as
-   * `category_group` — matching the snake_case convention used by every
-   * other field in this API (`category_id`, `provider_id`, `created_at`, ...).
-   */
+  /** Eager-loaded Category relation serialized as category_group. */
   category_group?: Category | null;
   description?: string | null;
   price: number | string;
@@ -82,9 +75,9 @@ export interface Service {
   provider?: { id: number; name: string } | null;
   created_at?: string;
   updated_at?: string;
-  /** Phase 9 (user-facing features): from `withAvg('reviews', 'rating')` — null until the service has at least one review. */
+  /** From withAvg('reviews', 'rating'). */
   reviews_avg_rating?: number | string | null;
-  /** Phase 9 (user-facing features): from `withCount('reviews')`. */
+  /** From withCount('reviews'). */
   reviews_count?: number;
 }
 
@@ -126,10 +119,10 @@ export interface Order {
   reference?: string;
   order_number?: string;
   total?: number | string;
-  /** Phase 4: set only when a coupon was applied at checkout. */
+  /** Set only when a coupon was applied at checkout. */
   coupon_code?: string | null;
   discount?: number | string | null;
-  /** Phase 5: set by an admin when fulfilling the order; triggers a delivery email once. */
+  /** Set by an admin when fulfilling the order. */
   delivery_content?: string | null;
   delivered_at?: string | null;
   payment_method?: string | null;
@@ -142,9 +135,17 @@ export interface Order {
   user?: User;
   service?: Service;
   items?: OrderItem[];
+
+  /** Linked purchase transaction, matched by the order reference. */
+  transaction?: Transaction | null;
 }
 
-export type OrderStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
+export type OrderStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export interface Transaction {
   id: number;
@@ -152,16 +153,23 @@ export interface Transaction {
   wallet_id?: number;
   reference?: string;
   amount: number | string;
+  currency?: string;
   status: string;
   type: string;
   description?: string;
   gateway?: string;
+  gateway_reference?: string | null;
+  failure_reason?: string | null;
+  idempotency_key?: string | null;
   created_at?: string;
   updated_at?: string;
   user?: User;
-  /** Populated only for `type === "purchase"` transactions — the order that
-   * was paid for. Null for deposit/credit/debit transactions. */
-  order?: Pick<Order, "id" | "reference" | "order_number" | "status"> | null;
+
+  /** Populated for purchase transactions when the order relation exists. */
+  order?: Pick<
+    Order,
+    "id" | "reference" | "order_number" | "status"
+  > | null;
 }
 
 export interface NotificationItem {
@@ -218,14 +226,14 @@ export interface WalletListItem extends User {
   wallet: Wallet | null;
 }
 
-/** One day's worth of order-count/revenue data, used by the admin dashboard charts. */
+/** One day's worth of order-count/revenue data. */
 export interface ChartDataPoint {
   date: string;
   orders: number;
   revenue: number;
 }
 
-/** Phase 8 (analytics): one day's new-signup count, used by the Analytics page's signups chart. */
+/** One day's new-signup count. */
 export interface SignupDataPoint {
   date: string;
   count: number;
@@ -248,7 +256,7 @@ export interface CategoryRevenueStat {
   revenue: number;
 }
 
-/** Response shape of GET /admin/analytics/overview?days=7|30|90|365. */
+/** GET /admin/analytics/overview?days=7|30|90|365. */
 export interface AnalyticsOverview {
   range_days: number;
   summary: {
@@ -268,14 +276,7 @@ export interface AnalyticsOverview {
   };
 }
 
-/**
- * Phase 4 (Providers/Coupons/Settings). `api_key` is never sent to the
- * browser — only a masked hint and a boolean flag so the admin UI can show
- * "a key is set" without ever exposing the plaintext credential.
- */
-/** Provider Router (Option A/B): health_status lifecycle — see backend
- * Provider model / ProviderHealthService doc comments. 'degraded' is still
- * routable (once its cooldown expires); only 'offline' is excluded. */
+/** Provider Router health status. */
 export type ProviderHealthStatus = "healthy" | "degraded" | "offline";
 
 export interface Provider {
@@ -287,7 +288,6 @@ export interface Provider {
   has_api_key: boolean;
   active: boolean;
   services_count?: number;
-  /** Provider Router (Option B) fields — see ProviderController::present(). */
   category?: string | null;
   priority?: number;
   is_primary?: boolean;
@@ -298,20 +298,16 @@ export interface Provider {
   cooldown_until?: string | null;
   failure_count?: number;
   success_count?: number;
-  /** Percentage 0-100, or null when there have been no attempts yet. */
   success_rate?: number | null;
   last_success_at?: string | null;
   last_failure_at?: string | null;
   last_health_check_at?: string | null;
   timeout_seconds?: number | null;
-  /** True once a real (non-mock) adapter is registered for this provider's slug. */
   is_real_adapter?: boolean;
   created_at?: string;
   updated_at?: string;
 }
 
-/** Provider Router (Option B): one health_checks history row from
- * GET /admin/providers/{provider}/health. */
 export interface ProviderHealthCheck {
   id: number;
   provider_id: number;
@@ -325,8 +321,6 @@ export interface ProviderHealthCheck {
   updated_at?: string;
 }
 
-/** Provider Router (Option B): one entry in a Service's ordered provider
- * failover chain, as returned by /admin/services/{service}/providers*. */
 export interface ServiceProviderRoute {
   id: number;
   service_id: number;
@@ -341,7 +335,6 @@ export interface ServiceProviderRoute {
   } | null;
   priority: number;
   enabled: boolean;
-  /** Derived display-only role: position 1 = "primary", everything else = "backup". */
   role: "primary" | "backup";
   position: number;
   provider_service_id?: string | null;
@@ -377,7 +370,12 @@ export interface CouponPreview {
   total_after_discount: number;
 }
 
-export type SettingType = "string" | "integer" | "float" | "boolean" | "json";
+export type SettingType =
+  | "string"
+  | "integer"
+  | "float"
+  | "boolean"
+  | "json";
 
 export interface Setting {
   id: number;
@@ -390,12 +388,6 @@ export interface Setting {
   updated_at?: string;
 }
 
-/**
- * Phase 9 (user-facing features): a review may only be left by a user with
- * a completed order for that service (enforced server-side); resubmitting
- * updates the same row rather than creating a new one (unique user+service
- * index on the backend).
- */
 export interface Review {
   id: number;
   user_id: number;
@@ -408,15 +400,7 @@ export interface Review {
   user?: { id: number; name: string };
 }
 
-/**
- * Phase 7 (Provider API Sync) follow-up: virtual-number/SMS-OTP rentals
- * from 5SIM / SMS-Man / OnlineSIM. Browsing is provider-scoped — each
- * provider has its own incompatible country/service coding scheme (5SIM:
- * English-word slugs, SMS-Man: numeric ids, OnlineSIM: E.164 dialling
- * codes) — so `country`/`code` below are always opaque, provider-native
- * identifiers passed straight back to that same provider's other
- * endpoints, never compared across providers.
- */
+/** Virtual-number/SMS-OTP rentals. */
 export interface VirtualNumberProviderOption {
   id: number;
   slug: string;
@@ -472,16 +456,13 @@ export interface VirtualNumberOrder {
   updated_at?: string;
 }
 
-/** Response shape of GET /services/{service}/reviews. */
 export interface ReviewsResponse {
   reviews: Review[];
   average_rating: number | null;
   reviews_count: number;
-  /** The authenticated user's own review for this service, if any — lets the UI pre-fill/label the form as "Edit your review" instead of "Write a review". */
   my_review: Review | null;
 }
 
-/** Response shape of the unauthenticated GET /settings/public allowlist (see backend PublicSettingController). */
 export interface PublicSettings {
   site_name: string;
   support_email: string | null;
