@@ -17,7 +17,7 @@ class AdminOrderController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => Order::with(['user', 'service'])
+            'data' => Order::with(['user', 'service', 'transaction'])
                 ->latest()
                 ->paginate(20),
         ]);
@@ -27,7 +27,7 @@ class AdminOrderController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $order->load(['user', 'service']),
+            'data' => $order->load(['user', 'service', 'items.service', 'transaction']),
         ]);
     }
 
@@ -78,7 +78,7 @@ class AdminOrderController extends Controller
             $fulfillment->refundIfNotAlready($order, "admin marked order {$order->status}");
         }
 
-        $order = $order->load(['user', 'service', 'items.service']);
+        $order = $order->load(['user', 'service', 'items.service', 'transaction']);
 
         // Only email when the order just became completed, OR when the admin
         // supplied new/changed delivery content on an already-completed
