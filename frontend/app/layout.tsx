@@ -10,7 +10,7 @@ const siteUrl = "https://vaulttra.vercel.app";
 // Keep the verified deployed OG banner on the legacy image host until it is
 // copied into this app's public/ directory.
 const socialImageUrl =
-  "https://charpsdev.vercel.app/opengraph-image?a7b097dd6a422499";
+  "https://vaulttra.vercel.app/opengraph-image?a7b097dd6a422499";
 const title = `${APP_NAME} — Unique Social Media Accounts, Virtual Numbers & eSIMs`;
 const description =
   "Vaultra is a marketplace for unique social media accounts, virtual numbers, eSIMs, data plans, airtime top-ups and gift cards — all cheap and pocket friendly. Fund your wallet, order in seconds, and track every transaction from one dashboard.";
@@ -58,11 +58,13 @@ export const metadata: Metadata = {
   },
 
   twitter: {
-    card: "summary_large_image",
-    title,
-    description,
-    images: [socialImageUrl],
-  },
+  card: "summary_large_image",
+  title: "Vaultra — Your Digital Marketplace",
+  description: "Your existing description",
+  images: [
+    "https://vaulttra.vercel.app/opengraph-image?a7b097dd6a422499",
+  ],
+},
 
   robots: {
     index: true,
