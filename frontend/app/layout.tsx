@@ -6,7 +6,11 @@ import AppProviders from "@/components/providers/AppProviders";
 import ThemeScript from "@/components/providers/ThemeScript";
 import { APP_NAME } from "@/lib/constants";
 
-const siteUrl = "https://charpsdev.vercel.app";
+const siteUrl = "https://vaulttra.vercel.app";
+// Keep the verified deployed OG banner on the legacy image host until it is
+// copied into this app's public/ directory.
+const socialImageUrl =
+  "https://charpsdev.vercel.app/opengraph-image?a7b097dd6a422499";
 const title = `${APP_NAME} — Unique Social Media Accounts, Virtual Numbers & eSIMs`;
 const description =
   "Vaultra is a marketplace for unique social media accounts, virtual numbers, eSIMs, data plans, airtime top-ups and gift cards — all cheap and pocket friendly. Fund your wallet, order in seconds, and track every transaction from one dashboard.";
@@ -45,7 +49,7 @@ export const metadata: Metadata = {
     description,
     images: [
       {
-        url: "/opengraph-image",
+        url: socialImageUrl,
         width: 1200,
         height: 630,
         alt: `${APP_NAME} — social media accounts, virtual numbers & digital products marketplace`,
@@ -57,7 +61,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title,
     description,
-    images: ["/opengraph-image"],
+    images: [socialImageUrl],
   },
 
   robots: {
@@ -111,4 +115,5 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </body>
     </html>
   );
-}
+  }
+      
